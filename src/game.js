@@ -1,4 +1,5 @@
-import { world, pc } from './world.js';
+import { WorldView } from './world.js';
+import { loadTileImageSource } from './tiles.js';
 /*
     LittleJS Hello World Starter Game
 */
@@ -10,6 +11,8 @@ import { world, pc } from './world.js';
 
 // game variables
 let particleEmiter;
+const TILE_SIZE = 24; // was 16 in demo
+window.TILE_SIZE = TILE_SIZE;
 
 // sound effects
 const clickSound = new Sound([.5,.5]);
@@ -18,65 +21,25 @@ const clickSound = new Sound([.5,.5]);
 // const medal_example = new Medal(0, 'Example Medal', 'Medal description goes here.');
 // medalsInit('Hello World');
 
-let tiles = [];
-
 ///////////////////////////////////////////////////////////////////////////////
 function gameInit()
 {
-    // create tile collision and visible tile layer
-    initTileCollision(vec2(32, 16));
-    const groundTileLayer = new TileLayer(vec2(), world.size);
-    const tileLayer = new TileLayer(vec2(), tileCollisionSize);
-    const charactersTileLayer = new TileLayer(vec2(), world.size);
+    window.wv = new WorldView();
+    wv.init();
     
-    const pos = vec2(); // counter
-
-    for (pos.x = world.size.x; pos.x--;) {
-        for (pos.y = world.size.y; pos.y--;) {
-            // setTileCollisionData(pos, 1);
-            const color = new Color(.5, .7, .5, .5);
-            const data = new TileLayerData(1, 0, 0, color);
-            groundTileLayer.setData(pos, data);
-        }
-    }
-
-    // get level data from the tiles image
-    const imageLevelDataRow = 1;
-    mainContext.drawImage(tileImage, 0, 0);
-    for (pos.x = tileCollisionSize.x; pos.x--;)
-    for (pos.y = tileCollisionSize.y; pos.y--;)
-    {
-        const data = mainContext.getImageData(pos.x, 16*(imageLevelDataRow+1)-pos.y-1, 1, 1).data;
-        if (data[0])
-        {
-            setTileCollisionData(pos, 1);
-            const tileIndex = 1;
-            const direction = randInt(4)
-            const mirror = randInt(2);
-            const color = randColor();
-            const data = new TileLayerData(tileIndex, direction, mirror, color);
-            tileLayer.setData(pos, data);
-        }
-    }
-
-    charactersTileLayer.setData(pc.pos, pc.getTileData());
-
-
-    tiles = [groundTileLayer, tileLayer, charactersTileLayer];
-    tiles.forEach((t) => t.redraw());
 
     // move camera to center of collision
     cameraPos = tileCollisionSize.scale(.5);
-    cameraScale = 32;
+    cameraScale = 42;
 
     // enable gravity
     gravity = 0; // -.01;
 
     // create particle emitter
-    const center = tileCollisionSize.scale(.5).add(vec2(0,9));
+    const emPos = vec2(10, 12);
     particleEmiter = new ParticleEmitter(
-        center, 0, 1, 0, 200, PI, // pos, angle, emitSize, emitTime, emitRate, emiteCone
-        0, vec2(16),                            // tileIndex, tileSize
+        emPos, 0, 1, 0, 200, PI, // pos, angle, emitSize, emitTime, emitRate, emiteCone
+        0, vec2(TILE_SIZE),                            // tileIndex, tileSize
         new Color(1,1,1),   new Color(0,0,0),   // colorStartA, colorStartB
         new Color(1,1,1,0), new Color(0,0,0,0), // colorEndA, colorEndB
         2, .2, .2, .1, .05,     // particleTime, sizeStart, sizeEnd, particleSpeed, particleAngleSpeed
@@ -85,6 +48,19 @@ function gameInit()
     );
     particleEmiter.elasticity = .3; // bounce when it collides
     particleEmiter.trailScale = 2;  // stretch in direction of motion
+
+
+    // console.log(tileImage.src);
+    // mainContext.drawImage(tileImage, 1000, 1000);
+    // mainContext.fillStyle = 'green';
+    // mainContext.fillRect(0, 0, 100, 100);
+    // // tileImage = new Image();
+    // tileImage.src = mainCanvas.toDataURL();
+    
+    // console.log(tileImage.src);
+    // mainContext.drawImage(tileImage, 1000, 1000);
+    // glInit();
+    // glTileTexture = glCreateTexture(tileImage);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -96,10 +72,10 @@ function gameUpdate()
         clickSound.play(mousePos);
 
         // change particle color and set to fade out
-        particleEmiter.colorStartA = new Color;
-        particleEmiter.colorStartB = randColor();
-        particleEmiter.colorEndA = particleEmiter.colorStartA.scale(1,0);
-        particleEmiter.colorEndB = particleEmiter.colorStartB.scale(1,0);
+        // particleEmiter.colorStartA = new Color;
+        // particleEmiter.colorStartB = randColor();
+        // particleEmiter.colorEndA = particleEmiter.colorStartA.scale(1,0);
+        // particleEmiter.colorEndB = particleEmiter.colorStartB.scale(1,0);
 
         // unlock medals
         // medal_example.unlock();
@@ -109,13 +85,13 @@ function gameUpdate()
     if (mousePosScreen.x) {
         // particleEmiter.pos = mousePos;
         // pc.pos = mousePos;
-        particleEmiter.pos = pc.pos;
+        // particleEmiter.pos = pc.pos;
     }
 
     cameraScale = clamp(cameraScale*(1-mouseWheel/10), 1, 1e3);
     cameraPos =  cameraPos.lerp(pc.pos, 0.1);
 
-    tiles[2].setData(pc.pos, pc.getTileData());
+    wv.update();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -135,9 +111,23 @@ function gameRender()
 function gameRenderPost()
 {
     // draw to overlay canvas for hud rendering
-    drawTextScreen('Hello World 🦀', vec2(overlayCanvas.width/2, 80), 80, new Color, 9);
+    // drawTextScreen('Hello World 🦀', vec2(overlayCanvas.width/2, 80), 80, new Color, 9);
+    const midX = overlayCanvas.width/2;
+    const r = (n) => Math.round(pc.pos[n] * 10) / 10;
+    drawTextScreen(`x ${r('x')}, y ${r('y')}`, vec2(midX, 80), 20, new Color, 9);
+    const invText = pc.inventory
+        .map((item) => item ? item.name || ' ' : ' ')
+        .map((n, i) => i + ' ' + (pc.equipIndex === i ? `[ ${n.toUpperCase()} equipped ]` : `[ ${n} ]`)).join('    ') + '    0: [Hands]';
+    drawTextScreen(invText, vec2(midX, overlayCanvas.height - 40), 20, new Color, 9);
+
 }
+
+
 
 ///////////////////////////////////////////////////////////////////////////////
 // Startup LittleJS Engine
-engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost, 'tiles.png');
+(async () => {
+    tileSizeDefault = vec2(TILE_SIZE);
+    const tis = await loadTileImageSource();
+    engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost, tis);
+})();
