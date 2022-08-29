@@ -1,3 +1,7 @@
+import { playSound } from './sounds.js';
+import { achievements } from './achievements.js';
+import { getSpecies, drawSpecies } from './species.js';
+
 /** A WorldEntity is a generic "thing" that exists in the world */
 class WorldEntity extends EngineObject {
     constructor(entOptions = {}) {
@@ -15,6 +19,7 @@ class WorldEntity extends EngineObject {
         this.name = name;
         this.world = world;
         this.facing = PI; // Radians: 0 = up, PI = down
+        this.direction = 4; // 0-7
         this.damageTimer = new Timer;
         this.health = 0;
         this.damaging = damaging;
@@ -28,6 +33,12 @@ class WorldEntity extends EngineObject {
         const mirror = randInt(2);
         const color = randColor();
         return new TileLayerData(this.tileIndex, direction, mirror, color);        
+    }
+
+    setDirection() {
+        this.direction = Math.round(
+            (this.facing < 0) ? 4 + ((PI + this.facing) * 4 / PI) : (this.facing * 4 / PI)
+        ) % 8;
     }
 
     damage(damage, damagingObject) {
@@ -53,6 +64,7 @@ class WorldEntity extends EngineObject {
 
     update() {
         super.update();
+        this.setDirection();
 
         // flash white when damaged
         if (!this.isDead() && this.damageTimer.isSet()) {
@@ -60,19 +72,15 @@ class WorldEntity extends EngineObject {
             this.additiveColor = new Color(a,.1,.1,.5);
         } else this.additiveColor = new Color(0,0,0,0);
     }
+
+    findPc() {
+        return this.world.animals.find((a) => a.isPlayerCharacter && !a.isDead());
+    }
 }
 
 class CharacterEntity extends WorldEntity {
     constructor(entOptions) {
         super(entOptions);
-        // From platformer's Character extends GameObject 
-        // this.groundTimer        = new Timer;
-        // this.jumpTimer          = new Timer;
-        // this.pressedJumpTimer   = new Timer;
-        // this.dodgeTimer         = new Timer;
-        // this.dodgeRechargeTimer = new Timer;
-        // this.deadTimer          = new Timer;
-        // this.grendeThrowTimer   = new Timer;
         this.actionTimer = new Timer;
         this.lookTimer = new Timer;
         this.planTimer = new Timer(rand(10));
@@ -81,6 +89,7 @@ class CharacterEntity extends WorldEntity {
         this.bleedTimer = new Timer;
         // this.drawSize = vec2(1);
         this.color = (new Color).setHSLA(rand(),1,.7);
+        this.species = entOptions.species || getSpecies(this.color);
         this.renderOrder = 10;
         this.walkCyclePercent = 0;
         this.health = 2; // TODO: 4?
@@ -90,10 +99,12 @@ class CharacterEntity extends WorldEntity {
         this.age = 0;
         this.oldAge = Infinity;
         this.timid = false;
+        this.walkTick = 0;
+        this.movementVelocity = vec2();
         this.moveInput = vec2();
         this.setCollision(1);
         // New
-        this.max = vec2(TILE_SIZE);
+        this.max = vec2(window.TILE_SIZE);
         // this.head = vec2(12 + randInt(12), 12 + randInt(4));
         // this.body = vec2(12 + randInt(12), 12 + randInt(4));
         this.head = vec2(0.5, 0.3);
@@ -122,10 +133,14 @@ class CharacterEntity extends WorldEntity {
         // this.bloodEmitter.particleDestroyCallback = persistentParticleDestroyCallback;
     }
 
-    damage(...args) {
-        const actualDmg = super.damage(...args);
+    damage(damage, damagingObject) {
+        const actualDmg = super.damage(damage, damagingObject);
         if (actualDmg <= 0) return;
-        sounds.hit.play(this.pos);
+        playSound('hit', this.pos);
+        // if (damagingObject && damagingObject.pos) {
+        //     // this.velocity.add(this.pos.subtract(damagingObject.pos).scale(100));
+        //     this.velocity.add(vec2(0, 1000));
+        // }
         this.bleed();
         this.lookTimer.unset();
     }
@@ -181,6 +196,7 @@ class CharacterEntity extends WorldEntity {
             this.equippedEntity = null;
             return;
         }
+        if (item.name === 'Butcher knife') achievements.award(1);
         // if (this.equippedEntity) this.equippedEntity.destroy();
         if (this.equippedEntity) this.equippedEntity.drawSize = vec2();
         if (!item.entity) {
@@ -193,7 +209,7 @@ class CharacterEntity extends WorldEntity {
     attack() {
         // const s = new Sound([.5,.5]);
         // s.play(this.pos);
-        sounds.attack.play(this.pos);
+        playSound('attack', this.pos);
         // this.damage(1);
     }
 
@@ -217,15 +233,15 @@ class CharacterEntity extends WorldEntity {
     look() {
         if (this.lookTimer.active()) return;
         if (!this.timid) return;
-        const pc = this.world.animals.find((a) => a.scary && !a.isDead());
-        if (!pc) return;
-        const dist = pc.pos.distance(this.pos);
+        const scaryEnt = this.world.animals.find((a) => a.scary && !a.isDead());
+        if (!scaryEnt) return;
+        const dist = scaryEnt.pos.distance(this.pos);
         if (dist > this.lookRange) return; // player is out of sight/smell
         const FEAR_DIST = 6;
         const fear = dist < FEAR_DIST;
         this.lookTimer.set(fear ? .5 : rand(.5, 2));
         if (fear) {
-            const goto = this.pos.subtract(pc.pos).normalize(FEAR_DIST + 1);
+            const goto = this.pos.subtract(scaryEnt.pos).normalize(FEAR_DIST + 1);
             this.walkTarget = this.pos.add(goto);
             this.urgency = 1;
         }
@@ -253,14 +269,27 @@ class CharacterEntity extends WorldEntity {
         this.plan();
         if (this.walkTarget && !isMoveInput) {
             const dist = this.pos.distance(this.walkTarget);
-            if (dist > 2)
+            if (dist > 2) {
                 this.velocity = this.velocity.lerp(this.walkTarget.subtract(this.pos), 0.5);
+                // this.movementVelocity = this.movementVelocity.lerp(this.walkTarget.subtract(this.pos), 0.5);
+            }
+        } else {
+            // apply movement acceleration and clamp
+            // const runInput = moveInput.scale(.04 * this.urgency);
+            // // this.movementVelocity = this.movementVelocity.add(runInput);
+            // this.movementVelocity = runInput;
         }
-        
         // apply movement acceleration and clamp
         const runInput = moveInput.scale(.04 * this.urgency);
         this.velocity = this.velocity.add(runInput);
+
         const maxSpd = this.maxSpeed * this.urgency;
+        // this.movementVelocity.x = clamp(this.movementVelocity.x, -maxSpd, maxSpd);
+        // this.movementVelocity.y = clamp(this.movementVelocity.y, -maxSpd, maxSpd);
+        // this.walkTick += this.movementVelocity.length() * 3;
+        // // Only use movement velocity if you're currently moving slower
+        // if (this.velocity.x > -maxSpd && this.velocity.x < maxSpd) this.velocity.x += this.movementVelocity.x;
+        // if (this.velocity.y > -maxSpd && this.velocity.y < maxSpd) this.velocity.y += this.movementVelocity.y;
         this.velocity.x = clamp(this.velocity.x, -maxSpd, maxSpd);
         this.velocity.y = clamp(this.velocity.y, -maxSpd, maxSpd);
 
@@ -287,18 +316,15 @@ class CharacterEntity extends WorldEntity {
 
     render() {
         let bodyPos = this.pos;
-        // if (!this.isDead()) {
-        //     // bounce pos with walk cycle
         bodyPos = bodyPos.add(vec2(0,.05*Math.sin(this.walkCyclePercent*PI)));
-        //     // make bottom flush
-        //     bodyPos = bodyPos.add(vec2(0,(this.drawSize.y-this.size.y)/2));
-        // }
-        // drawTile(bodyPos, this.drawSize, this.tileIndex, this.tileSize, this.color, this.angle, this.mirror);
         const color = this.color.add(this.additiveColor).clamp();
-        
-        drawRect(bodyPos, this.size.scale(this.drawScale), new Color(.3, .3, .3, .4), this.angle);
+        drawSpecies(mainContext, bodyPos, this.species, this.direction, this.walkTick);
+        // drawRect(bodyPos, this.size.scale(this.drawScale), new Color(.3, .3, .3, .4), this.angle);
+        return;
+    }
+
+    renderOld() {
         // drawRect(bodyPos.add(vec2(0, .5)), this.head.scale(this.drawScale), color, this.angle);
-        
         drawRect(bodyPos.add(vec2(0, 0)), this.body, color, this.angle);
         drawRect(bodyPos.add(vec2(0, .3)), this.head, color, this.angle);
         this.legs.forEach((leg, li) => {
@@ -326,6 +352,8 @@ class CharacterEntity extends WorldEntity {
 class PlayerCharacterEntity extends CharacterEntity {
     constructor(entOptions) {
         super(entOptions);
+        this.isPlayerCharacter = true;
+        this.health = 5;
         this.maxSpeed = .2;
         this.renderOrder = 10;
         this.age = 18;
@@ -348,8 +376,8 @@ class PlayerCharacterEntity extends CharacterEntity {
         this.moveInput = isUsingGamepad ? gamepadStick(0) : 
             vec2(keyIsDown(39) - keyIsDown(37), keyIsDown(38) - keyIsDown(40));
 
-        if (this.moveInput) {
-            // this.pos = this.pos.add(this.moveInput.scale(.12));
+        if (this.moveInput && this.moveInput.x || this.moveInput.y) {
+            achievements.award(0);
         }
         this.scary = true;
 
@@ -363,6 +391,7 @@ class PlayerCharacterEntity extends CharacterEntity {
             ee.localAngle = this.facing + (PI * 1.2);
             ee.renderOrder = (ee.pos.y < this.pos.y) ? 11 : 9;
         }
+        // console.log(this.walkTick, this.velocity.length());
     }
 }
 
@@ -373,8 +402,9 @@ class AnimalEntity extends CharacterEntity {
     }
 
     kill() {
-        sounds.hit.play(this.pos);
+        playSound('hit', this.pos);
         this.health = 0;
+        const pc = this.findPc();
         if (pc) pc.pickup(this.world.itemTypes.meat);
         this.angle = PI;
         this.bleed();
@@ -385,8 +415,10 @@ class AnimalEntity extends CharacterEntity {
     update() {
         super.update();
 
+        const pc = this.findPc();
         if (!this.isDead() && pc && pc.equippedEntity && pc.equippedEntity.damaging) {
             if (isOverlapping(this.pos, this.size, pc.equippedEntity.pos, pc.equippedEntity.size)) {
+                achievements.award(2);
                 const dmg = this.damage(pc.equippedEntity.damaging, pc.equippedEntity);
                 if (dmg) pc.pickup(this.world.itemTypes.blood);
             }

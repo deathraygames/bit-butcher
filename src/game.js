@@ -1,32 +1,17 @@
 import { WorldView } from './world.js';
 import { loadTileImageSource } from './tiles.js';
-/*
-    LittleJS Hello World Starter Game
-*/
-
-'use strict';
+import { achievements } from './achievements.js';
 
 // popup errors if there are any (help diagnose issues on mobile devices)
 //onerror = (...parameters)=> alert(parameters);
 
 // game variables
 let particleEmiter;
+const win = window;
 let gameState = 0; // 0 = not begun, 1 = alive & running, 2 = dead, 3 = win
-const TILE_SIZE = 24; // was 16 in demo
-const WIN_MEAT = 30;
-
-window.TILE_SIZE = TILE_SIZE;
-window.pc = 0;
-
-// sound effects
-window.sounds = {
-    hit: new Sound([,,183,.03,.02,.09,,1.49,-1.8,,,,-0.01,1.8,-1,.1,,.36,.08,.25]),
-    click: new Sound([.5,.5]),
-    attack: new Sound([,,493,.01,.09,0,4,1.14,,,,,,,,.1,,.1,.01]),
-};
-
-
-
+const TILE_SIZE = win.TILE_SIZE = 24; // was 16 in demo
+const WIN_MEAT = 24;
+let wv;
 
 // medals
 // const medal_example = new Medal(0, 'Example Medal', 'Medal description goes here.');
@@ -35,7 +20,7 @@ window.sounds = {
 ///////////////////////////////////////////////////////////////////////////////
 function gameInit()
 {
-    window.wv = new WorldView();
+    wv = win.wv = new WorldView();
     wv.init();
 
     // move camera to center of collision
@@ -76,8 +61,11 @@ function gameInit()
 ///////////////////////////////////////////////////////////////////////////////
 function gameUpdate()
 {
+    const { pc } = wv;
+    if (pc !== win.pc) win.pc = pc; // Just for easy debugging
     if (mouseWasPressed(0))
     {
+        // achievements.award(0);
         // if (pc) pc.damage(1, pc);
         // play sound when mouse is pressed
         // sounds.click.play(mousePos);
@@ -104,20 +92,23 @@ function gameUpdate()
         else {
             const meat = pc.findInventoryItem('Meat');
             const meatQuantity = meat ? meat.quantity : 0;
-            if (meatQuantity >= WIN_MEAT) gameState = 3;
+            if (meatQuantity >= WIN_MEAT) {
+                gameState = 3;
+                achievements.award(3);
+            }
         }
     }
 
     // move particles to mouse location if on screen
-    if (mousePosScreen.x) {
+    // if (mousePosScreen.x) {
         // particleEmiter.pos = mousePos;
         // pc.pos = mousePos;
         // particleEmiter.pos = pc.pos;
-    }
+    // }as
 
     cameraScale = clamp(cameraScale*(1-mouseWheel/10), 1, 1e3);
     
-    wv.update();
+    // if (wv) wv.update();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -136,6 +127,7 @@ function gameRender()
 ///////////////////////////////////////////////////////////////////////////////
 function gameRenderPost()
 {
+    const { pc } = wv;
     const d = drawTextScreen;
     const white = new Color;
     // draw to overlay canvas for hud rendering
@@ -162,6 +154,18 @@ function gameRenderPost()
             .join('    ');
         d(invText, vec2(midX, overlayCanvas.height - 40), 20, white, 4);
 
+        achievements.forEach((a, i) => 
+            d(
+                `[${a[1] ? 'X' : ' '}] ` + a[0],
+                vec2(overlayCanvas.width - 260, 100 + (i * 30)),
+                18,
+                a[1] ? new Color(.4,1,.4,.5) : white,
+                4,
+                new Color(0,0,0, a[1] ? .5 : 1),
+                'left'
+            )
+        );
+
         const gb = (pc.age > 85) ? 0 : 1;
         const c = new Color(1,gb,gb,.8);
         const w = 500 * (Math.max(0, 100 - pc.age)/100);
@@ -169,7 +173,7 @@ function gameRenderPost()
         d(`Age: ${Math.ceil(pc.age)}`, vec2(midX, 40), 20, c, 4);
         if (gameState === 3) {
             font.drawText('YOU WIN', cameraPos.add(vec2(0,5)), .2, 1);
-            d('Press Enter to restart', vec2(midX, midY - 80), 40, white, 4);
+            d('Refresh page to play again', vec2(midX, midY - 80), 40, white, 4);
         }
     }
 }

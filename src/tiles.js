@@ -1,4 +1,4 @@
-const TILE_SIZE = 24;
+const TILE_SIZE = window.TILE_SIZE || 24;
 let ctx;
 let tileCount = 0;
 let ri = randInt;

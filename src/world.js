@@ -27,23 +27,23 @@ class WorldView {
     constructor() {
         this.world = worldInit();
         this.tiles = [];
+        this.pc = 0;
     }
 
     makePc() {
         const { world } = this
-        const pc = new PlayerCharacterEntity({ pos: world.size.scale(.5), world });
-        pc.pickup(world.itemTypes.knife);
+        this.pc = new PlayerCharacterEntity({ pos: world.size.scale(.5), world });
+        this.pc.pickup(world.itemTypes.knife);
         // pc.pickup(world.itemTypes.meat);
         // pc.pickup(world.itemTypes.blood);
-        world.animals.push(pc);
-        return window.pc = pc;
+        world.animals.push(this.pc);
+        return this.pc;
     }
 
     init() {
         const { world } = this;
         const { size, species, animals } = world;
         // const pc = this.makePc();
-        
 
         let i;
         for(i = 100; i--;) { species.push(makeSpecies()) }
@@ -107,9 +107,9 @@ class WorldView {
         this.tiles.forEach((t) => t.redraw());
     }
 
-    update() {
-        // this.tiles[0].setData(pc.pos, pc.getTileData());
-    }
+    // update() {
+    //     // this.tiles[0].setData(pc.pos, pc.getTileData());
+    // }
 }
 
 export { PlayerCharacterEntity, WorldView };
