@@ -26,7 +26,7 @@ type ..\engine\engine.all.release.js >> %BUILD_FILENAME%
 echo. >> %BUILD_FILENAME%
 
 rem add your game's files to include here
-type ..\game.js >> %BUILD_FILENAME%
+type ..\game_bundle.js >> %BUILD_FILENAME%
 echo. >> %BUILD_FILENAME%
 
 rem copy images to build folder

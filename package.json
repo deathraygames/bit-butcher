@@ -31,6 +31,10 @@
   },
   "scripts": {
     "serve": "npx http-server",
-    "build": "build.bat"
+    "rollup": "rollup ./src/game.js --file game_bundle.js --format iife",
+    "build": "npm run rollup && build.bat"
+  },
+  "devDependencies": {
+    "rollup": "^2.78.1"
   }
 }
