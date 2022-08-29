@@ -1,4 +1,4 @@
-import { PlayerCharacterEntity, CharacterEntity } from './entities.js';
+import { PlayerCharacterEntity, AnimalEntity } from './entities.js';
 
 const WORLD_SIZE = 100;
 
@@ -10,6 +10,12 @@ function worldInit() {
         items: [],
         animals: [],
         species: [],
+        itemTypes: {
+            meat: { name: 'Meat', tileIndex: 7, quantity: 1, stack: 64 },
+            blood: { name: 'Blood', tileIndex: 6, quantity: 1, stack: 64 },
+            knife: { name: 'Butcher knife', type: 'w', tileIndex: 5, quantity: 1, stack: 1, damaging: 1 },
+            bait: { name: 'Bait', type: 'b', tileIndex: 0, quantity: 1, stack: 64 },
+        },
     };
 }
 
@@ -23,21 +29,28 @@ class WorldView {
         this.tiles = [];
     }
 
+    makePc() {
+        const { world } = this
+        const pc = new PlayerCharacterEntity({ pos: world.size.scale(.5), world });
+        pc.pickup(world.itemTypes.knife);
+        // pc.pickup(world.itemTypes.meat);
+        // pc.pickup(world.itemTypes.blood);
+        world.animals.push(pc);
+        return window.pc = pc;
+    }
+
     init() {
         const { world } = this;
         const { size, species, animals } = world;
-        window.pc = new PlayerCharacterEntity({ pos: size.scale(.5), world });
-        pc.pickup({ name: 'Butcher knife' });
-        pc.pickup({ name: 'Bait' });
-
-        animals.push(pc);
+        // const pc = this.makePc();
+        
 
         let i;
         for(i = 100; i--;) { species.push(makeSpecies()) }
         for(i = 20; i--;) {
             // TODO: pick a random species
             for(let q = 2; q--;) {
-                animals.push(new CharacterEntity({
+                animals.push(new AnimalEntity({
                     tileIndex: 0,
                     pos: vec2(rand(0, WORLD_SIZE), rand(0, WORLD_SIZE)),
                     world,
@@ -88,7 +101,7 @@ class WorldView {
         // }
 
         // charactersTileLayer.setData(pc.pos, pc.getTileData());
-        groundTileLayer.setData(pc.pos, pc.getTileData());
+        // groundTileLayer.setData(pc.pos, pc.getTileData());
 
         this.tiles = [groundTileLayer, tileLayer];
         this.tiles.forEach((t) => t.redraw());

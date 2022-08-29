@@ -11,11 +11,22 @@ import { loadTileImageSource } from './tiles.js';
 
 // game variables
 let particleEmiter;
+let gameState = 0; // 0 = not begun, 1 = alive & running, 2 = dead, 3 = win
 const TILE_SIZE = 24; // was 16 in demo
+const WIN_MEAT = 30;
+
 window.TILE_SIZE = TILE_SIZE;
+window.pc = 0;
 
 // sound effects
-const clickSound = new Sound([.5,.5]);
+window.sounds = {
+    hit: new Sound([,,183,.03,.02,.09,,1.49,-1.8,,,,-0.01,1.8,-1,.1,,.36,.08,.25]),
+    click: new Sound([.5,.5]),
+    attack: new Sound([,,493,.01,.09,0,4,1.14,,,,,,,,.1,,.1,.01]),
+};
+
+
+
 
 // medals
 // const medal_example = new Medal(0, 'Example Medal', 'Medal description goes here.');
@@ -26,7 +37,6 @@ function gameInit()
 {
     window.wv = new WorldView();
     wv.init();
-    
 
     // move camera to center of collision
     cameraPos = tileCollisionSize.scale(.5);
@@ -68,8 +78,9 @@ function gameUpdate()
 {
     if (mouseWasPressed(0))
     {
+        // if (pc) pc.damage(1, pc);
         // play sound when mouse is pressed
-        clickSound.play(mousePos);
+        // sounds.click.play(mousePos);
 
         // change particle color and set to fade out
         // particleEmiter.colorStartA = new Color;
@@ -81,6 +92,22 @@ function gameUpdate()
         // medal_example.unlock();
     }
 
+    if (keyWasReleased(13)) {
+        if (gameState === 0 || gameState === 2) {
+            gameState = 1;
+            wv.makePc();
+        }
+    }
+    if (pc) {
+        cameraPos =  cameraPos.lerp(pc.pos, 0.1);
+        if (pc.isDead()) gameState = 2;
+        else {
+            const meat = pc.findInventoryItem('Meat');
+            const meatQuantity = meat ? meat.quantity : 0;
+            if (meatQuantity >= WIN_MEAT) gameState = 3;
+        }
+    }
+
     // move particles to mouse location if on screen
     if (mousePosScreen.x) {
         // particleEmiter.pos = mousePos;
@@ -89,8 +116,7 @@ function gameUpdate()
     }
 
     cameraScale = clamp(cameraScale*(1-mouseWheel/10), 1, 1e3);
-    cameraPos =  cameraPos.lerp(pc.pos, 0.1);
-
+    
     wv.update();
 }
 
@@ -110,16 +136,42 @@ function gameRender()
 ///////////////////////////////////////////////////////////////////////////////
 function gameRenderPost()
 {
+    const d = drawTextScreen;
+    const white = new Color;
     // draw to overlay canvas for hud rendering
-    // drawTextScreen('Hello World 🦀', vec2(overlayCanvas.width/2, 80), 80, new Color, 9);
+    // d('Hello World 🦀', vec2(overlayCanvas.width/2, 80), 80, new Color, 9);
     const midX = overlayCanvas.width/2;
-    const r = (n) => Math.round(pc.pos[n] * 10) / 10;
-    drawTextScreen(`x ${r('x')}, y ${r('y')}`, vec2(midX, 80), 20, new Color, 9);
-    const invText = pc.inventory
-        .map((item) => item ? item.name || ' ' : ' ')
-        .map((n, i) => i + ' ' + (pc.equipIndex === i ? `[ ${n.toUpperCase()} equipped ]` : `[ ${n} ]`)).join('    ') + '    0: [Hands]';
-    drawTextScreen(invText, vec2(midX, overlayCanvas.height - 40), 20, new Color, 9);
+    const midY = overlayCanvas.height/2;
+    // const r = (n) => Math.round(pc.pos[n] * 10) / 10;
+    // d(`x ${r('x')}, y ${r('y')}`, vec2(midX, 80), 20, new Color, 9);
+    const font = new FontImage;
 
+    
+    if (gameState === 2) {
+        d('YOU DIED', vec2(midX, midY - 90), 90, new Color(1, 0, 0), 4);
+        d('Press Enter to restart', vec2(midX, midY), 40, new Color(1, .5, .5), 4);
+    } else if (gameState === 0) {
+        font.drawText('BIT BUTCHER', cameraPos.add(vec2(0,3)), .2, 1);
+        // d('BIT BUTCHER', vec2(midX, midY - 90), 90, white, 4);
+        d('Press Enter to start', vec2(midX, midY), 40, white, 4);
+    } else if (gameState === 1 || gameState === 3 && pc) {
+        const invText = pc.inventory
+            .map((item) => item ? (item.name || ' ') + ' x' + item.quantity : ' ')
+            .map((n, i) => i + ': ' + (pc.equipIndex === i ? `[ ${n.toUpperCase()} equipped ]` : `[ ${n} ]`))
+            .concat(['0: [Hands]', 'E: Action'])
+            .join('    ');
+        d(invText, vec2(midX, overlayCanvas.height - 40), 20, white, 4);
+
+        const gb = (pc.age > 85) ? 0 : 1;
+        const c = new Color(1,gb,gb,.8);
+        const w = 500 * (Math.max(0, 100 - pc.age)/100);
+        drawRectScreenSpace(vec2(midX, 40), vec2(w, 2), c);
+        d(`Age: ${Math.ceil(pc.age)}`, vec2(midX, 40), 20, c, 4);
+        if (gameState === 3) {
+            font.drawText('YOU WIN', cameraPos.add(vec2(0,5)), .2, 1);
+            d('Press Enter to restart', vec2(midX, midY - 80), 40, white, 4);
+        }
+    }
 }
 
 
