@@ -366,7 +366,7 @@ class CharacterEntity extends WorldEntity {
         if (dist > this.lookRange || dist > LOOK_FOOD_DIST) return; // player is out of sight/smell
         const item = pc.getEquippedItem();
         if (!item) return; // player is not holding food
-        if (pc.hasBaitEquipped()) {
+        if (pc.hasBaitEquipped() && item.entity) {
             this.walkTarget = item.entity.pos.add( vec2().setAngle(rand(2 * PI), rand(1, 2)) );
         }
     }
@@ -397,7 +397,7 @@ class CharacterEntity extends WorldEntity {
         if (this.agingTimer.active()) return false;
         // @ 6 sec/year --> 10 minutes IRL = 600 sec IRL = 100 years
         // @ 3 sec/year --> 5 minutes IRL = 100 years
-        this.agingTimer.set(2);
+        this.agingTimer.set(3);
         this.age += 1;
         if (this.isOld()) this.damage(1, this);
     }
@@ -468,8 +468,11 @@ class CharacterEntity extends WorldEntity {
         let bodyPos = this.pos;
         bodyPos = bodyPos.add(vec2(0,.05*Math.sin(this.walkCyclePercent*PI)));
         // const color = this.color.add(this.additiveColor).clamp();
+        drawRect(bodyPos.add(vec2(0, -this.size.y * .75)), vec2(this.size.x, .2), new Color(0,0,0, .1), this.angle);
+        drawRect(bodyPos.add(vec2(0, -this.size.y * .75)), vec2(this.size.x * .9, .1), new Color(0,0,0, .1), this.angle);
         drawSpecies(mainContext, bodyPos, this.species, this.direction, this.walkTick);
         // drawRect(bodyPos, this.size.scale(this.drawScale), new Color(.3, .3, .3, .4), this.angle);
+        
         return;
     }
 

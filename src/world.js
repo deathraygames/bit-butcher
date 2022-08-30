@@ -9,7 +9,7 @@ function worldInit() {
         blocks: [],
         items: [],
         animals: [],
-        species: [],
+        // species: [],
         itemTypes: {
             meat: { name: 'Meat', tileIndex: 7, quantity: 1, stack: 64, emoji: '🍖' },
             blood: { name: 'Blood', tileIndex: 6, quantity: 1, stack: 64, emoji: '🩸' },
@@ -71,7 +71,7 @@ class WorldView {
         // const pc = this.makePc();
 
         let i;
-        for(i = 100; i--;) { species.push(makeSpecies()) }
+        // for(i = 100; i--;) { species.push(makeSpecies()) }
         for(i = 20; i--;) {
             // TODO: pick a random species
             for(let q = 2; q--;) {
@@ -101,20 +101,71 @@ class WorldView {
         const tileLayer = new TileLayer(vec2(), tileCollisionSize);
         // const charactersTileLayer = new TileLayer(vec2(), size);
         
-        const pos = vec2(); // counter
-        for (pos.x = size.x; pos.x--;) {
-            for (pos.y = size.y; pos.y--;) {
-                const r = rand(); // randSeeded?
-                const rock = r > .98;
-                if (rock) setTileCollisionData(pos, 1);
-                const tileIndex = r > .5 ? 1 : randInt(1, 5);
-                const direction = randInt(4)
-                const mirror = randInt(2);
-                const color = rock ? randColor() : undefined;
-                const data = new TileLayerData(tileIndex, direction, mirror, color);
-                groundTileLayer.setData(pos, data);
+        
+        const setGroundTile = (pos, tileIndex, color, redraw) => {
+            const data = new TileLayerData(
+                tileIndex, 
+                randInt(4), // direction
+                randInt(2), // mirror
+                color,
+            );
+            groundTileLayer.setData(pos, data, redraw);
+        };
+        const loopOverMap = (callback) => {
+            const pos = vec2(); // counter
+            for (pos.x = size.x; pos.x--;) {
+                for (pos.y = size.y; pos.y--;) {
+                    callback(pos, pos.x + (pos.y * size.x));
+                }
             }
+        };
+
+        let elevationArr = [];
+        for(i = 40; i--;) {
+            const pos = vec2(randInt(size.x), randInt(size.y));
+            elevationArr.push({ pos, elevation: randInt(4)});
         }
+        const getNearestElevation = (pos) => {
+            let elevation;
+            elevationArr.reduce((nearest, obj) => {
+                const dist = obj.pos.distance(pos);
+                if (dist < nearest) {
+                    elevation = obj.elevation;
+                    return dist;
+                }
+                return nearest;
+            }, Infinity);
+            return elevation;
+        };
+        // const fullElevationArr = [];
+        // loopOverMap((pos, i) => {
+        //     fullElevationArr[i] = getNearestElevation(pos);
+        //     const r = rand();
+        //     if (r < .2) fullElevationArr[i] = 0;
+        //     else if (r < .5) fullElevationArr[i] = randInt(1, 5);
+        // });
+
+        loopOverMap((pos, i) => {
+            // console.log(i);
+            const r = rand(); // randSeeded?
+            // const r = abs(Math.sin((pos.x/2 + pos.y/3)));
+            const blocked = r > .985;
+            const rock = (blocked && pos.distance(this.center) > 40);
+            
+            // const rock = r > .98 && r <= .985;
+            // const blocked = r > .985;
+            if (rock || blocked) setTileCollisionData(pos, 1);
+            // const tileIndex = r > .5 ? 1 : randInt(1, 5);
+            // const tileIndex = rock ? 25 + randInt(2) : randInt(1, 5);\
+            const elevation = getNearestElevation(pos);
+            let tileIndex = elevation + 1; // preferred tile index based on location
+            if (r < .2) tileIndex = 1;
+            else if (r < .5) tileIndex = randInt(1, 5);
+            if (rock) tileIndex = 25 + randInt(2);
+            // console.log('pos', pos.x, pos.y, tileIndex);
+            const color = blocked && !rock ? randColor() : undefined;
+            setGroundTile(pos, tileIndex, color);
+        });
 
         // get level data from the tiles image
         // const imageLevelDataRow = 1;

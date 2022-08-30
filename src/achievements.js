@@ -2,7 +2,7 @@ import { playSound } from './sounds.js';
 let achievements = [
     ['Move (W,A,S,D or Arrows)'], // 0
     ['Pick up and equip knife'], // 1
-    ['Stab animal'], // 2
+    ['Stab an animal'], // 2
     ['Breed animals'], // 3
     ['Make forbidden wine'], // 4
     ['Collect 24 meat'], // 5

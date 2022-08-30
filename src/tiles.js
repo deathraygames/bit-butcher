@@ -27,11 +27,24 @@ function drawTerrain(r, g, b) {
             n,
         );
     });
+    return x;
+}
+
+function drawRockyTerrain(r, g, b) {
+    const x = drawTerrain(r, g, b),
+        y = 0;
+    [14, 10, 6, 3, 3, 2, 2, 1, 1, 1].forEach((n) => rect(
+        'b', 'b', 'c',
+        x + ri(TILE_SIZE - n),
+        y + ri(TILE_SIZE - n),
+        n,
+        n,
+    ));
 }
 
 function drawTiles(doc) {
     const canvas = doc.createElement('canvas');
-    canvas.width = 16 * TILE_SIZE;
+    canvas.width = 30 * TILE_SIZE;
     canvas.height = 2 * TILE_SIZE;
     doc.body.appendChild(canvas);
     ctx = canvas.getContext('2d');
@@ -47,7 +60,7 @@ function drawTiles(doc) {
     ctx.font = '20px serif';
     [ // Tile indices:
         '🔪', // 5
-        '🩸', // 6s
+        '🩸', // 6
         '🍖', // 7
         '🌿', // 8 
         '💕', // 9
@@ -56,9 +69,21 @@ function drawTiles(doc) {
         '💀', // 12
         '🍷', // 13
         '🍲', // 14
+        '⛏️', // 15
+        '🪓', // 16
+        '🔨', // 17
+        '🕯️', // 18
+        '🧱', // 19
+        '', // 20
+        '', // 21
+        '', // 22
+        '', // 23
+        '', // 24
     ].forEach((emoji) => {
         ctx.fillText(emoji, getTileX() - 1, 20);
     });
+    drawRockyTerrain(3, 4, 3); // 25
+    drawRockyTerrain(4, 3, 3); // 26
     // const x = getTileX();
     // rect(3, 3, 3, x, 0);
     // Tile incides 5, 6, 7, 8, 9

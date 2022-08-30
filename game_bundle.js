@@ -28,7 +28,7 @@
     let achievements = [
         ['Move (W,A,S,D or Arrows)'], // 0
         ['Pick up and equip knife'], // 1
-        ['Stab animal'], // 2
+        ['Stab an animal'], // 2
         ['Breed animals'], // 3
         ['Make forbidden wine'], // 4
         ['Collect 24 meat'], // 5
@@ -625,7 +625,7 @@
             if (dist > this.lookRange || dist > LOOK_FOOD_DIST) return; // player is out of sight/smell
             const item = pc.getEquippedItem();
             if (!item) return; // player is not holding food
-            if (pc.hasBaitEquipped()) {
+            if (pc.hasBaitEquipped() && item.entity) {
                 this.walkTarget = item.entity.pos.add( vec2().setAngle(rand(2 * PI), rand(1, 2)) );
             }
         }
@@ -656,7 +656,7 @@
             if (this.agingTimer.active()) return false;
             // @ 6 sec/year --> 10 minutes IRL = 600 sec IRL = 100 years
             // @ 3 sec/year --> 5 minutes IRL = 100 years
-            this.agingTimer.set(2);
+            this.agingTimer.set(3);
             this.age += 1;
             if (this.isOld()) this.damage(1, this);
         }
@@ -727,8 +727,11 @@
             let bodyPos = this.pos;
             bodyPos = bodyPos.add(vec2(0,.05*Math.sin(this.walkCyclePercent*PI)));
             // const color = this.color.add(this.additiveColor).clamp();
+            drawRect(bodyPos.add(vec2(0, -this.size.y * .75)), vec2(this.size.x, .2), new Color(0,0,0, .1), this.angle);
+            drawRect(bodyPos.add(vec2(0, -this.size.y * .75)), vec2(this.size.x * .9, .1), new Color(0,0,0, .1), this.angle);
             drawSpecies(mainContext, bodyPos, this.species, this.direction, this.walkTick);
             // drawRect(bodyPos, this.size.scale(this.drawScale), new Color(.3, .3, .3, .4), this.angle);
+            
             return;
         }
 
@@ -877,7 +880,7 @@
             blocks: [],
             items: [],
             animals: [],
-            species: [],
+            // species: [],
             itemTypes: {
                 meat: { name: 'Meat', tileIndex: 7, quantity: 1, stack: 64, emoji: '🍖' },
                 blood: { name: 'Blood', tileIndex: 6, quantity: 1, stack: 64, emoji: '🩸' },
@@ -887,10 +890,6 @@
                 meal: { name: 'Meal', tileIndex: 14, quantity: 1, stack: 8, youth: 1, consumable: 1, emoji: '🍲' },
             },
         };
-    }
-
-    function makeSpecies() {
-        return [];
     }
 
     class WorldView {
@@ -939,7 +938,7 @@
             // const pc = this.makePc();
 
             let i;
-            for(i = 100; i--;) { species.push(makeSpecies()); }
+            // for(i = 100; i--;) { species.push(makeSpecies()) }
             for(i = 20; i--;) {
                 // TODO: pick a random species
                 for(let q = 2; q--;) {
@@ -969,20 +968,71 @@
             const tileLayer = new TileLayer(vec2(), tileCollisionSize);
             // const charactersTileLayer = new TileLayer(vec2(), size);
             
-            const pos = vec2(); // counter
-            for (pos.x = size.x; pos.x--;) {
-                for (pos.y = size.y; pos.y--;) {
-                    const r = rand(); // randSeeded?
-                    const rock = r > .98;
-                    if (rock) setTileCollisionData(pos, 1);
-                    const tileIndex = r > .5 ? 1 : randInt(1, 5);
-                    const direction = randInt(4);
-                    const mirror = randInt(2);
-                    const color = rock ? randColor() : undefined;
-                    const data = new TileLayerData(tileIndex, direction, mirror, color);
-                    groundTileLayer.setData(pos, data);
+            
+            const setGroundTile = (pos, tileIndex, color, redraw) => {
+                const data = new TileLayerData(
+                    tileIndex, 
+                    randInt(4), // direction
+                    randInt(2), // mirror
+                    color,
+                );
+                groundTileLayer.setData(pos, data, redraw);
+            };
+            const loopOverMap = (callback) => {
+                const pos = vec2(); // counter
+                for (pos.x = size.x; pos.x--;) {
+                    for (pos.y = size.y; pos.y--;) {
+                        callback(pos, pos.x + (pos.y * size.x));
+                    }
                 }
+            };
+
+            let elevationArr = [];
+            for(i = 40; i--;) {
+                const pos = vec2(randInt(size.x), randInt(size.y));
+                elevationArr.push({ pos, elevation: randInt(4)});
             }
+            const getNearestElevation = (pos) => {
+                let elevation;
+                elevationArr.reduce((nearest, obj) => {
+                    const dist = obj.pos.distance(pos);
+                    if (dist < nearest) {
+                        elevation = obj.elevation;
+                        return dist;
+                    }
+                    return nearest;
+                }, Infinity);
+                return elevation;
+            };
+            // const fullElevationArr = [];
+            // loopOverMap((pos, i) => {
+            //     fullElevationArr[i] = getNearestElevation(pos);
+            //     const r = rand();
+            //     if (r < .2) fullElevationArr[i] = 0;
+            //     else if (r < .5) fullElevationArr[i] = randInt(1, 5);
+            // });
+
+            loopOverMap((pos, i) => {
+                // console.log(i);
+                const r = rand(); // randSeeded?
+                // const r = abs(Math.sin((pos.x/2 + pos.y/3)));
+                const blocked = r > .985;
+                const rock = (blocked && pos.distance(this.center) > 40);
+                
+                // const rock = r > .98 && r <= .985;
+                // const blocked = r > .985;
+                if (rock || blocked) setTileCollisionData(pos, 1);
+                // const tileIndex = r > .5 ? 1 : randInt(1, 5);
+                // const tileIndex = rock ? 25 + randInt(2) : randInt(1, 5);\
+                const elevation = getNearestElevation(pos);
+                let tileIndex = elevation + 1; // preferred tile index based on location
+                if (r < .2) tileIndex = 1;
+                else if (r < .5) tileIndex = randInt(1, 5);
+                if (rock) tileIndex = 25 + randInt(2);
+                // console.log('pos', pos.x, pos.y, tileIndex);
+                const color = blocked && !rock ? randColor() : undefined;
+                setGroundTile(pos, tileIndex, color);
+            });
 
             // get level data from the tiles image
             // const imageLevelDataRow = 1;
@@ -1044,11 +1094,24 @@
                 n,
             );
         });
+        return x;
+    }
+
+    function drawRockyTerrain(r, g, b) {
+        const x = drawTerrain(r, g, b),
+            y = 0;
+        [14, 10, 6, 3, 3, 2, 2, 1, 1, 1].forEach((n) => rect(
+            'b', 'b', 'c',
+            x + ri(TILE_SIZE$1 - n),
+            y + ri(TILE_SIZE$1 - n),
+            n,
+            n,
+        ));
     }
 
     function drawTiles(doc) {
         const canvas = doc.createElement('canvas');
-        canvas.width = 16 * TILE_SIZE$1;
+        canvas.width = 30 * TILE_SIZE$1;
         canvas.height = 2 * TILE_SIZE$1;
         doc.body.appendChild(canvas);
         ctx = canvas.getContext('2d');
@@ -1064,7 +1127,7 @@
         ctx.font = '20px serif';
         [ // Tile indices:
             '🔪', // 5
-            '🩸', // 6s
+            '🩸', // 6
             '🍖', // 7
             '🌿', // 8 
             '💕', // 9
@@ -1073,9 +1136,21 @@
             '💀', // 12
             '🍷', // 13
             '🍲', // 14
+            '⛏️', // 15
+            '🪓', // 16
+            '🔨', // 17
+            '🕯️', // 18
+            '🧱', // 19
+            '', // 20
+            '', // 21
+            '', // 22
+            '', // 23
+            '', // 24
         ].forEach((emoji) => {
             ctx.fillText(emoji, getTileX() - 1, 20);
         });
+        drawRockyTerrain(3, 4, 3); // 25
+        drawRockyTerrain(4, 3, 3); // 26
         // const x = getTileX();
         // rect(3, 3, 3, x, 0);
         // Tile incides 5, 6, 7, 8, 9
