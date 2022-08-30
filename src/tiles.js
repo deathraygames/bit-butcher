@@ -31,6 +31,8 @@ function drawTerrain(r, g, b) {
 
 function drawTiles(doc) {
     const canvas = doc.createElement('canvas');
+    canvas.width = 16 * TILE_SIZE;
+    canvas.height = 2 * TILE_SIZE;
     doc.body.appendChild(canvas);
     ctx = canvas.getContext('2d');
     canvas.style = styleCanvas;
@@ -43,11 +45,26 @@ function drawTiles(doc) {
     drawTerrain(4, 3, 3);
     ctx.fillStyle = '#fff';
     ctx.font = '20px serif';
-    const x = getTileX();
+    [ // Tile indices:
+        '🔪', // 5
+        '🩸', // 6s
+        '🍖', // 7
+        '🌿', // 8 
+        '💕', // 9
+        '❕', // 10
+        '💢', // 11
+        '💀', // 12
+        '🍷', // 13
+        '🍲', // 14
+    ].forEach((emoji) => {
+        ctx.fillText(emoji, getTileX() - 1, 20);
+    });
+    // const x = getTileX();
     // rect(3, 3, 3, x, 0);
-    ctx.fillText('🔪🩸🍖', x - 1, 19);
+    // Tile incides 5, 6, 7, 8, 9
+    // ctx.fillText('🔪🩸🍖🌿💕', x - 1, 19.5);
     // Test
-    ctx.fillText('🦀🍖🥩🍗💀🔪', 0, 44);
+    // ctx.fillText('🦀🍖🥩🍗💀🔪', 0, 44);
     // ctx.fillText('🔥', 0, 22);
     return canvas.toDataURL();
 }

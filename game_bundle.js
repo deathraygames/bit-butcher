@@ -6,10 +6,15 @@
         if (!Sound) throw new Error('no Sound');
         if (sounds) return; // already set
         sounds = {
-            // for some reason, the "hit" property was getting uglified
+            // for some reason, the property names were getting uglified so they need quotes
             'hit': new Sound([,,183,.03,.02,.09,,1.49,-1.8,,,,-0.01,1.8,-1,.1,,.36,.08,.25]),
-            'click': new Sound([.5,.5]),
             'attack': new Sound([,,493,.01,.09,0,4,1.14,,,,,,,,.1,,.1,.01]),
+            'craft': new Sound([,,7,.03,.28,.44,2,1.44,,-0.3,20,.11,.04,,,.1,,.55,.29]),
+            'dud': new Sound([.8,,112,,.07,.05,1,2.26,-0.6,,,,,1.8,,.1,.2,.98,.1,.1]),
+            'powerup': new Sound([,,1152,,.04,.17,,1.21,,,744,.08,,,,,,.91,.03]),
+            'pickup': new Sound([1.05,,172,.02,,.17,2,.02,,,-409,.06,,,,.1,,.55,,.19]),
+            'walk': new Sound([.2,.1,70,,,.01,4,,,,-9,.1,,,,,,.5]),
+            'consume': new Sound([1.2,,16,.07,.18,.34,1,.38,-0.1,-5.6,49,.15,.02,-0.1,36,.1,,.39,.14]),
         };
     };
 
@@ -21,16 +26,24 @@
     };
 
     let achievements = [
-        ['Move (W,A,S,D or Arrows)'],
-        ['Equip knife (Press 1)'],
-        ['Stab animal'],
-        ['Collect 24 meat'],
+        ['Move (W,A,S,D or Arrows)'], // 0
+        ['Pick up and equip knife'], // 1
+        ['Stab animal'], // 2
+        ['Breed animals'], // 3
+        ['Make forbidden wine'], // 4
+        ['Collect 24 meat'], // 5
+        ['Eat a meaty meal'], // 6
     ];
     let a = achievements;
-    a.award = (n) => a[n][1] = (a[n][1] || 0) + 1;
+    a.award = (n) => {
+        if (!a[n][1]) playSound('powerup');
+        a[n][1] = (a[n][1] || 0) + 1;
+    };
+    a.count = () => a.reduce((c, x) => c + (x[1] ? 1 : 0), 0);
 
     const size = 24;
     const ri$1 = randInt;
+    const MUTANT_CHANCE = 20; // 1 out of 20
 
     function fixPoint(n) {
     	return Math.max(Math.min(Math.round(n), size), 0);
@@ -79,21 +92,47 @@
     	};
     }
 
+    function breedRandomValue(bioParents, key) {
+    	// First parent in array is considered the dominant parent
+    	const dominantParentValue = bioParents[0][key];
+    	// If it's a number value, then determine randomly
+    	if (typeof dominantParentValue === 'number') {
+    		const range = bioParents.reduce((rangeArr, species) => {
+    			const value = species[key];
+    			if (value < rangeArr[0]) rangeArr[0] = value;
+    			if (value > rangeArr[1]) rangeArr[1] = value;
+    			return rangeArr;
+    		}, [Infinity, -Infinity]); // index 0 is min, index 1 is max
+    		return ri$1(range[0], range[1]);
+    	}
+    	// Otherwise just use the dom parent's value e.g. for colors
+    	return dominantParentValue;
+    }
+
+    function breedSpecies(bioParents) {
+    	if (!bioParents) return;
+    	const newDna = getSpecies();
+    	Object.keys(newDna).forEach((key) => {
+    		if (ri$1(MUTANT_CHANCE) > 0) newDna[key] = breedRandomValue(bioParents, key);
+    	});
+    	return newDna;
+    }
+
     function getLegPoints(x, y, kneeY, legWidth, kneeBend, kneeWidth, lift) {
     	const len = size - y;
-      const liftAmount = Math.floor((len / 2) * lift);
-      const footY = size - liftAmount;
-      const liftKneeY = kneeY - (liftAmount / 2);
-      // TODO: This is not symmmetric, doesn't look correct when leg is pointing right
-      const kneeX = Math.max(0, x + kneeBend + (kneeBend * lift));
-    	return [
-      	x, y, // hip - top left
-        x + legWidth, y, // hip - top right
-        kneeX + kneeWidth, liftKneeY, // right side of knee (back if left)
-        x + legWidth, footY, // foot (heel if left)
-        x, footY, // foot - toe
-        kneeX, liftKneeY, // knee
-      ];
+    	const liftAmount = Math.floor((len / 2) * lift);
+    	const footY = size - liftAmount;
+    	const liftKneeY = kneeY - (liftAmount / 2);
+    	// TODO: This is not symmmetric, doesn't look correct when leg is pointing right
+    	const kneeX = Math.max(0, x + kneeBend + (kneeBend * lift));
+    		return [
+    		x, y, // hip - top left
+    		x + legWidth, y, // hip - top right
+    		kneeX + kneeWidth, liftKneeY, // right side of knee (back if left)
+    		x + legWidth, footY, // foot (heel if left)
+    		x, footY, // foot - toe
+    		kneeX, liftKneeY, // knee
+    	];
     }
 
     function drawSpecies(ctx, pos, species, direction = 4, t = 0) {
@@ -234,6 +273,7 @@
                 world,
                 damaging = 0,
                 name = randInt(999),
+                health = 0,
             } = entOptions;
             super(pos, size, tileIndex, tileSize, angle);
             this.name = name;
@@ -241,7 +281,7 @@
             this.facing = PI; // Radians: 0 = up, PI = down
             this.direction = 4; // 0-7
             this.damageTimer = new Timer;
-            this.health = 0;
+            this.health = health;
             this.damaging = damaging;
             // 0 = up, 1 = right-up, 2 = right, 3 = right-down, 4 = down, 5 = left-down, 6 = left, 7 = left-up
             this.drawSize = vec2(1);
@@ -270,13 +310,12 @@
             this.damageTimer.set(1);
             for (const child of this.children)
                 child.damageTimer && child.damageTimer.set(1);
-
             // apply damage and kill if necessary
             const newHealth = max(this.health - damage, 0);
-            if (!newHealth) this.kill(damagingObject);
-
-            // set new health and return amount damaged
-            return this.health - (this.health = newHealth);
+            const amountDamaged = this.health - newHealth;
+            this.health = newHealth;
+            if (!this.health) this.kill(damagingObject);
+            return amountDamaged;
         }
 
         isDead() { return !this.health; }
@@ -304,47 +343,57 @@
             this.actionTimer = new Timer;
             this.lookTimer = new Timer;
             this.planTimer = new Timer(rand(10));
-            this.fearTimer = new Timer;
             this.agingTimer = new Timer;
             this.bleedTimer = new Timer;
-            // this.drawSize = vec2(1);
+            // Emotions
+            this.emotionKey = null;
+            this.estrousTimer = new Timer; // "in heat"?
+            this.fearTimer = new Timer;
+            // Fixed values
             this.color = (new Color).setHSLA(rand(),1,.7);
-            this.species = entOptions.species || getSpecies(this.color);
+            this.bioParents = entOptions.bioParents || null;
+            this.species = entOptions.species || breedSpecies(this.bioParents) || getSpecies(this.color);
             this.renderOrder = 10;
-            this.walkCyclePercent = 0;
             this.health = 2; // TODO: 4?
-            this.maxSpeed = .1;
-            this.urgency = 1;
+            this.maxSpeed = .14;
             this.lookRange = 7;
-            this.age = 0;
             this.oldAge = Infinity;
             this.timid = false;
+            this.followsBait = false;
+            this.setCollision(1);
+            // Changeable / temp values
+            this.age = 0;
             this.walkTick = 0;
+            this.walkCyclePercent = 0;
+            this.urgency = 1;
             this.movementVelocity = vec2();
             this.moveInput = vec2();
-            this.setCollision(1);
             // New
             this.max = vec2(window.TILE_SIZE);
             // this.head = vec2(12 + randInt(12), 12 + randInt(4));
             // this.body = vec2(12 + randInt(12), 12 + randInt(4));
-            this.head = vec2(0.5, 0.3);
-            this.body = vec2(0.6, 0.3);
-            this.legs = [
-                // hip, knee, foot
-                [vec2(-.2, -.1), vec2(-.3, -.3), vec2(-.2, -.5)],
-                [vec2(.2, -.1), vec2(.3, -.3), vec2(.2, -.5)],
-            ];
+            // this.head = vec2(0.5, 0.3);
+            // this.body = vec2(0.6, 0.3);
+            // this.legs = [
+            //     // hip, knee, foot
+            //     [vec2(-.2, -.1), vec2(-.3, -.3), vec2(-.2, -.5)],
+            //     [vec2(.2, -.1), vec2(.3, -.3), vec2(.2, -.5)],
+            // ];
             this.drawScale = this.drawSize.x / this.size.x;
             this.inventory = [,,,,,,,,,,];
             this.equipIndex = -1;
             this.equippedEntity = null;
             this.walkTarget = null; // vec2();
 
+            this.addChild(this.emotionEntity = new WorldEntity({ tileIndex: 9 }));
+            this.emotionEntity.localPos = vec2(0, 1.2);
+            this.setEmotion();
+
             this.addChild(this.bloodEmitter = new ParticleEmitter(
                 vec2(), 0, 0, 0, 0, PI,  // pos, angle, emitSize, emitTime, emitRate, emiteCone
                 undefined, undefined, // tileIndex, tileSize
-                new Color(1,.2,.2), new Color(.9,.2,.2), // colorStartA, colorStartB
-                new Color(1,.3,.3), new Color(.9,.3,.3), // colorEndA, colorEndB
+                new Color(1,.2,.2), new Color(.5,.1,.1), // colorStartA, colorStartB
+                new Color(.4,.1,.1), new Color(.4,.2,.2,.3), // colorEndA, colorEndB
                 5, .2, .1, .07, .1, // particleTime, sizeStart, sizeEnd, particleSpeed, particleAngleSpeed
                 .95, .95, 1, PI, .01,    // damping, angleDamping, gravityScale, particleCone, fadeRate, 
                 .2, 1              // randomness, collide, additive, randomColorLinear, renderOrder
@@ -353,21 +402,40 @@
             // this.bloodEmitter.particleDestroyCallback = persistentParticleDestroyCallback;
         }
 
+        setEmotion(emotionKey) {
+            const emotionTiles = { estrous: 9, fear: 10, anger: 11, dead: 12 };
+            this.emotionEntity.drawSize = vec2(emotionKey ? 1 : 0);
+            if (!emotionKey) return;
+            this.emotionEntity.tileIndex = emotionTiles[emotionKey];
+        }
+
+        updateEmotion() {
+            if (this.isDead()) this.emotionKey = 'dead';
+            else {
+                const estrous = -1 * this.estrousTimer.get();
+                const fear = -1 * this.fearTimer.get();
+                if (estrous > 0 && estrous > fear) this.emotionKey = 'estrous';
+                else if (fear > 0) this.emotionKey = 'fear';
+                else this.emotionKey = null;
+            }
+            this.setEmotion(this.emotionKey);
+        }
+
         damage(damage, damagingObject) {
             const actualDmg = super.damage(damage, damagingObject);
-            if (actualDmg <= 0) return;
+            if (actualDmg <= 0) return 0;
             playSound('hit', this.pos);
-            // if (damagingObject && damagingObject.pos) {
-            //     // this.velocity.add(this.pos.subtract(damagingObject.pos).scale(100));
-            //     this.velocity.add(vec2(0, 1000));
-            // }
+            if (damagingObject && damagingObject.pos) {
+                this.velocity = this.velocity.add(this.pos.subtract(damagingObject.pos).scale(rand(.4, .8)));
+            }
             this.bleed();
             this.lookTimer.unset();
+            return actualDmg;
         }
 
         bleed() {
             if (this.bleedTimer.active()) return;
-            this.bleedTimer.set(.2);
+            this.bleedTimer.set(this.isDead() ? .5 : .2);
             this.bloodEmitter.emitRate = 100;
         }
 
@@ -390,6 +458,10 @@
             return (i < 0) ? null : this.inventory[i];
         }
 
+        getEquippedItem() {
+            return this.inventory[this.equipIndex];
+        }
+
         pickup(item, invIndex) {
             if (typeof invIndex !== 'number') {
                 invIndex = this.findOpenInventoryIndex(item.name);
@@ -401,6 +473,7 @@
             } else {
                 this.inventory[invIndex] = item;
             }
+            playSound('pickup', this.pos);
             return true;
         }
 
@@ -426,6 +499,12 @@
             this.equippedEntity = item.entity;
         }
 
+        hasBaitEquipped() {
+            const item = this.getEquippedItem();
+            if (!item) return; // creature is not holding item
+            return item.bait || 0;
+        }
+
         attack() {
             // const s = new Sound([.5,.5]);
             // s.play(this.pos);
@@ -433,12 +512,74 @@
             // this.damage(1);
         }
 
-        action() {
+        getNearest(things = [], targetPos) {
+            let nearest;
+            things.reduce((best, a) => {
+                const dist = a.pos.distance(targetPos);
+                if (dist < best) {
+                    nearest = a;
+                    return dist;
+                }
+                return best;
+            }, Infinity);
+            return nearest;
+        }
+
+        findNearestAnimal(nearestPos = this.pos) {
+            const aliveAnimals = this.world.animals.filter((a) => !a.isDead() && a !== this);
+            const ee = this.equippedEntity;
+            const interactingAnimals = aliveAnimals.filter((a) => isOverlapping(a.pos, a.size, ee.pos, ee.size));
+            return this.getNearest(interactingAnimals, nearestPos);
+        }
+
+        feedNearest(nearestPos = this.pos) {
+            const nearestAnimal = this.findNearestAnimal(nearestPos);
+            if (!nearestAnimal) return;
+            nearestAnimal.health += 1;
+            nearestAnimal.estrousTimer.set(10);
+        }
+
+        craft(itemKey) {
+            const equippedItem = this.getEquippedItem();
+            if (itemKey === 'wine') {
+                if (equippedItem.name !== 'Blood' || equippedItem.quantity < 10) {
+                    playSound('dud', this.pos);
+                    return;
+                }
+                equippedItem.quantity -= 10;
+                achievements.award(4);
+                this.world.makeItem('wine', this.pos, 2);
+                playSound('craft');
+            } else if (itemKey === 'meal') {
+                if (equippedItem.name !== 'Meat' || equippedItem.quantity < 24) {
+                    playSound('dud', this.pos);
+                    return;
+                }
+                equippedItem.quantity -= 24;
+                this.world.makeItem('meal', this.pos, 2);
+                playSound('craft', this.pos);
+            }
+        }
+
+        consume(equippedItem) {
+            if (equippedItem.quantity <= 0) return;
+            equippedItem.quantity -= 1;
+            this.health += 1;
+            this.age -= (equippedItem.youth || 0);
+            if (equippedItem.name === 'Meal') achievements.award(6);
+            playSound('consume', this.pos);
+        }
+
+        action(targetPos) {
             if (this.actionTimer.active()) return;
-            const equippedItem = this.inventory[this.equipIndex];
+            const equippedItem = this.getEquippedItem();
             this.actionTimer.set(.25);
             if (!equippedItem) return; // this.pickupNearby();
             if (equippedItem.type === 'w') return this.attack();
+            if (equippedItem.bait) return this.feedNearest(targetPos);
+            if (equippedItem.name === 'Blood') this.craft('wine');
+            if (equippedItem.name === 'Meat') this.craft('meal');
+            else if (equippedItem.consumable) this.consume(equippedItem);
         }
 
         plan() {
@@ -452,24 +593,70 @@
 
         look() {
             if (this.lookTimer.active()) return;
-            if (!this.timid) return;
-            const scaryEnt = this.world.animals.find((a) => a.scary && !a.isDead());
-            if (!scaryEnt) return;
+            const fear = this.lookScary();
+            if (this.estrousTimer.active()) this.lookMate();
+            else if (!fear) this.lookFood();
+        }
+
+        lookScary() {
+            if (!this.timid) return 0;
+            const scaryEnt = this.world.animals.find((a) => a.scary && !a.isDead() && !a.hasBaitEquipped() && a !== this);
+            if (!scaryEnt) return 0;
             const dist = scaryEnt.pos.distance(this.pos);
-            if (dist > this.lookRange) return; // player is out of sight/smell
+            if (dist > this.lookRange) return 0; // player is out of sight/smell
             const FEAR_DIST = 6;
             const fear = dist < FEAR_DIST;
             this.lookTimer.set(fear ? .5 : rand(.5, 2));
+            this.fearTimer.set(1);
             if (fear) {
                 const goto = this.pos.subtract(scaryEnt.pos).normalize(FEAR_DIST + 1);
                 this.walkTarget = this.pos.add(goto);
                 this.urgency = 1;
             }
+            return fear;
+        }
+
+        lookFood() {
+            if (!this.followsBait) return;
+            const pc = this.findPc();
+            if (!pc) return;
+            const dist = pc.pos.distance(this.pos);
+            const LOOK_FOOD_DIST = 4;
+            if (dist > this.lookRange || dist > LOOK_FOOD_DIST) return; // player is out of sight/smell
+            const item = pc.getEquippedItem();
+            if (!item) return; // player is not holding food
+            if (pc.hasBaitEquipped()) {
+                this.walkTarget = item.entity.pos.add( vec2().setAngle(rand(2 * PI), rand(1, 2)) );
+            }
+        }
+
+        lookMate() {
+            if (!this.estrousTimer.active()) return;
+            this.lookTimer.set(1);
+            const mates = this.world.animals.filter((a) => !a.isDead() && a.estrousTimer.active() && a !== this);
+            console.log(mates);
+            if (!mates.length) return;
+            const nearestMate = this.getNearest(mates, this.pos);
+            console.log(nearestMate);
+            if (!nearestMate) return;
+            // TODO: don't do the mating in the looking?
+            if (isOverlapping(nearestMate.pos, nearestMate.size, this.pos, this.size)) this.mate(nearestMate);
+            else this.walkTarget = nearestMate.pos;
+        }
+
+        mate(mate) {
+            this.lookTimer.set(5);
+            mate.estrousTimer.unset();
+            this.estrousTimer.unset();
+            achievements.award(3);
+            this.world.makeAnimal(this.pos, [this.species, mate.species]);
         }
 
         getOlder() {
             if (this.agingTimer.active()) return false;
-            this.agingTimer.set(6); // 600 sec = 10 minutes --> @6 sec/year --> 10 minutes = 100 years
+            // @ 6 sec/year --> 10 minutes IRL = 600 sec IRL = 100 years
+            // @ 3 sec/year --> 5 minutes IRL = 100 years
+            this.agingTimer.set(2);
             this.age += 1;
             if (this.isOld()) this.damage(1, this);
         }
@@ -487,28 +674,34 @@
             }
             this.look();
             this.plan();
-            if (this.walkTarget && !isMoveInput) {
+
+            // Movement
+            this.movementVelocity = this.velocity.copy();
+            if (isMoveInput) {
+                const runInput = moveInput.scale(.04 * this.urgency);
+                this.movementVelocity = this.movementVelocity.add(runInput);
+                // this.movementVelocity = runInput;
+                // if (!this.groundTimer.isSet()) playSound('walk', this.pos);
+                // this.groundTimer.set(.1);
+            } else if (this.walkTarget) {
                 const dist = this.pos.distance(this.walkTarget);
                 if (dist > 2) {
-                    this.velocity = this.velocity.lerp(this.walkTarget.subtract(this.pos), 0.5);
-                    // this.movementVelocity = this.movementVelocity.lerp(this.walkTarget.subtract(this.pos), 0.5);
+                    this.movementVelocity = this.movementVelocity.lerp(this.walkTarget.subtract(this.pos), 0.5);
                 }
             }
-            // apply movement acceleration and clamp
-            const runInput = moveInput.scale(.04 * this.urgency);
-            this.velocity = this.velocity.add(runInput);
-
             const maxSpd = this.maxSpeed * this.urgency;
-            // this.movementVelocity.x = clamp(this.movementVelocity.x, -maxSpd, maxSpd);
-            // this.movementVelocity.y = clamp(this.movementVelocity.y, -maxSpd, maxSpd);
-            // this.walkTick += this.movementVelocity.length() * 3;
+            // TODO: use this.movementVelocity.clampLength(); -- but needs tweaking the max speed
+            this.movementVelocity.x = clamp(this.movementVelocity.x, -maxSpd, maxSpd);
+            this.movementVelocity.y = clamp(this.movementVelocity.y, -maxSpd, maxSpd);
             // // Only use movement velocity if you're currently moving slower
-            // if (this.velocity.x > -maxSpd && this.velocity.x < maxSpd) this.velocity.x += this.movementVelocity.x;
-            // if (this.velocity.y > -maxSpd && this.velocity.y < maxSpd) this.velocity.y += this.movementVelocity.y;
-            this.velocity.x = clamp(this.velocity.x, -maxSpd, maxSpd);
-            this.velocity.y = clamp(this.velocity.y, -maxSpd, maxSpd);
+            this.velocity = vec2(
+                (this.velocity.x > maxSpd || this.velocity.x < -maxSpd) ? this.velocity.x : this.movementVelocity.x,
+                (this.velocity.y > maxSpd || this.velocity.y < -maxSpd) ? this.velocity.y : this.movementVelocity.y,
+            );
 
             const speed = this.velocity.length();
+            // TODO: clean this up - redundant?
+            this.walkTick += this.movementVelocity.length() * 3.5;
             this.walkCyclePercent += speed * .5;
             this.walkCyclePercent = speed > .01 ? mod(this.walkCyclePercent) : 0;
             // Facing
@@ -518,6 +711,7 @@
         }
 
         update() {
+            this.updateEmotion();
             this.live();
             this.clot();
             // TODO: Always apply friction?
@@ -532,7 +726,7 @@
         render() {
             let bodyPos = this.pos;
             bodyPos = bodyPos.add(vec2(0,.05*Math.sin(this.walkCyclePercent*PI)));
-            this.color.add(this.additiveColor).clamp();
+            // const color = this.color.add(this.additiveColor).clamp();
             drawSpecies(mainContext, bodyPos, this.species, this.direction, this.walkTick);
             // drawRect(bodyPos, this.size.scale(this.drawScale), new Color(.3, .3, .3, .4), this.angle);
             return;
@@ -543,7 +737,7 @@
             drawRect(bodyPos.add(vec2(0, 0)), this.body, color, this.angle);
             drawRect(bodyPos.add(vec2(0, .3)), this.head, color, this.angle);
             this.legs.forEach((leg, li) => {
-                // console.log(this.walkCyclePercent);
+                // console.log(this.walkCyclePercent);s
                 // TODO: Fix this walking animation
                 const liftPercent = Math.sin((this.walkCyclePercent + (.1 * li)) * PI); 
                 const lift = vec2(0, .2 * liftPercent);
@@ -585,7 +779,7 @@
             numKeyCodes.forEach((n) => { if (keyIsDown(n)) this.equip(n - 48); });
 
             if (keyIsDown(81) || gamepadIsDown(1)) this.throw();
-            if (keyIsDown(69) || mouseIsDown(0) || gamepadIsDown(0)) this.action();
+            if (keyIsDown(69) || mouseIsDown(0) || gamepadIsDown(0)) this.action(mousePos);
 
             // movement control
             this.moveInput = isUsingGamepad ? gamepadStick(0) : 
@@ -603,6 +797,11 @@
                 const thrust = this.actionTimer.active() ? 1 : .7;
                 ee.drawSize = vec2(this.actionTimer.active() ? 1.2 : 1);
                 ee.localPos = vec2().setAngle(this.facing, thrust);
+                let offset = vec2();
+                if (this.direction === 0) offset = vec2(.35, -.1);
+                else if (this.direction === 1) offset = vec2(.2, -.2);
+                else if (this.direction === 7) offset = vec2(-.2, -.1);
+                ee.localPos = ee.localPos.add(offset);
                 ee.localAngle = this.facing + (PI * 1.2);
                 ee.renderOrder = (ee.pos.y < this.pos.y) ? 11 : 9;
             }
@@ -614,16 +813,17 @@
         constructor(entOptions) {
             super(entOptions);
             this.timid = true;
+            this.followsBait = true;
         }
 
         kill() {
             playSound('hit', this.pos);
             this.health = 0;
-            const pc = this.findPc();
-            if (pc) pc.pickup(this.world.itemTypes.meat);
-            this.angle = PI;
+            // this.angle = .1;
             this.bleed();
+            this.setEmotion('dead');
             // Not sure if setTimeout is the best approach in this framework
+            setTimeout(() => this.world.makeItem('meat', this.pos, 1), 500);
             setTimeout(() => super.kill(), 4000);
         }
 
@@ -641,21 +841,50 @@
         }
     }
 
+    class ItemEntity extends WorldEntity {
+        constructor(entOptions) {
+            super(entOptions);
+            this.itemType = entOptions.itemType;
+            this.tileIndex = this.itemType.tileIndex;
+            this.fadeTimer = new Timer;
+        }
+
+        update() {
+            super.update();
+            const pc = this.findPc();
+            if (this.isDead()) {
+                this.drawSize = vec2(1 - this.fadeTimer.getPercent());
+                if (pc) this.pos = this.pos.lerp(pc.pos, .1);
+            } else if (pc) {
+                if (isOverlapping(this.pos, this.size, pc.pos, pc.size)) {
+                    // achievements.award(2);
+                    // const dmg = this.damage(pc.equippedEntity.damaging, pc.equippedEntity);
+                    pc.pickup(this.itemType);
+                    this.health = 0;
+                    this.fadeTimer.set(.4);
+                    setTimeout(() => this.kill(), 400);
+                }
+            }
+        }
+    }
+
     const WORLD_SIZE = 100;
 
     function worldInit() {
         return {
-            seed: 123,
+            // seed: 123,
             size: vec2(WORLD_SIZE, WORLD_SIZE),
             blocks: [],
             items: [],
             animals: [],
             species: [],
             itemTypes: {
-                meat: { name: 'Meat', tileIndex: 7, quantity: 1, stack: 64 },
-                blood: { name: 'Blood', tileIndex: 6, quantity: 1, stack: 64 },
-                knife: { name: 'Butcher knife', type: 'w', tileIndex: 5, quantity: 1, stack: 1, damaging: 1 },
-                bait: { name: 'Bait', type: 'b', tileIndex: 0, quantity: 1, stack: 64 },
+                meat: { name: 'Meat', tileIndex: 7, quantity: 1, stack: 64, emoji: '🍖' },
+                blood: { name: 'Blood', tileIndex: 6, quantity: 1, stack: 64, emoji: '🩸' },
+                knife: { name: 'Butcher knife', type: 'w', tileIndex: 5, quantity: 1, stack: 8, damaging: 1, emoji: '🔪' },
+                herb: { name: 'Herb', type: 'b', tileIndex: 8, quantity: 1, stack: 64, bait: 1, emoji: '🌿' },
+                wine: { name: 'Blood wine', tileIndex: 13, quantity: 1, stack: 64, youth: 10, consumable: 1, emoji: '🍷' },
+                meal: { name: 'Meal', tileIndex: 14, quantity: 1, stack: 8, youth: 1, consumable: 1, emoji: '🍲' },
             },
         };
     }
@@ -667,23 +896,46 @@
     class WorldView {
         constructor() {
             this.world = worldInit();
+            this.world.makeAnimal = (...args) => this.makeAnimal(...args);
+            this.world.makeItem = (...args) => this.makeItem(...args);
             this.tiles = [];
             this.pc = 0;
+            this.center = vec2();
         }
 
-        makePc() {
+        makePc(pos = this.center.copy()) {
             const { world } = this;
-            this.pc = new PlayerCharacterEntity({ pos: world.size.scale(.5), world });
-            this.pc.pickup(world.itemTypes.knife);
-            // pc.pickup(world.itemTypes.meat);
-            // pc.pickup(world.itemTypes.blood);
+            this.pc = new PlayerCharacterEntity({ pos, world });
             world.animals.push(this.pc);
             return this.pc;
         }
 
+        makeItem(itemTypeParam, posParam, dist = 0) {
+            const itemType = (typeof itemTypeParam === 'string') ? this.world.itemTypes[itemTypeParam] : itemTypeParam;
+            const pos = (dist) ? posParam.add( vec2(rand(-dist, dist), rand(-dist, dist)) ) : posParam.copy();
+            const { world } = this;
+            world.items.push(new ItemEntity({
+                itemType,
+                pos,
+                health: 1,
+                world,
+            }));     
+        }
+
+        makeAnimal(pos, bioParents) {
+            const { world } = this;
+            world.animals.push(new AnimalEntity({
+                tileIndex: 0,
+                pos,
+                world,
+                bioParents,
+            }));
+        }
+
         init() {
             const { world } = this;
-            const { size, species, animals } = world;
+            const { size, species, animals, items } = world;
+            this.center = world.size.scale(.5);
             // const pc = this.makePc();
 
             let i;
@@ -691,13 +943,23 @@
             for(i = 20; i--;) {
                 // TODO: pick a random species
                 for(let q = 2; q--;) {
-                    animals.push(new AnimalEntity({
-                        tileIndex: 0,
-                        pos: vec2(rand(0, WORLD_SIZE), rand(0, WORLD_SIZE)),
-                        world,
-                    }));
+                    this.makeAnimal(vec2(rand(WORLD_SIZE), rand(WORLD_SIZE)));
                 }
             }
+
+            const getNear =  (n) => this.center.add( vec2().setAngle(rand(2 * PI), n) );
+            this.makeItem(world.itemTypes.knife, getNear(10));
+            [20, WORLD_SIZE/2, rand(20, WORLD_SIZE/2)].forEach((n) =>
+                this.makeItem(world.itemTypes.herb, getNear(n))
+            );
+            // for(i = 1; i--;) {
+            //     items.push(new ItemEntity({
+            //         itemType: world.itemTypes.knife,
+            //         pos: near,
+            //         health: 1,
+            //         world,
+            //     }));
+            // }
             
             // this.animals.push
             
@@ -786,6 +1048,8 @@
 
     function drawTiles(doc) {
         const canvas = doc.createElement('canvas');
+        canvas.width = 16 * TILE_SIZE$1;
+        canvas.height = 2 * TILE_SIZE$1;
         doc.body.appendChild(canvas);
         ctx = canvas.getContext('2d');
         canvas.style = styleCanvas;
@@ -798,11 +1062,26 @@
         drawTerrain(4, 3, 3);
         ctx.fillStyle = '#fff';
         ctx.font = '20px serif';
-        const x = getTileX();
+        [ // Tile indices:
+            '🔪', // 5
+            '🩸', // 6s
+            '🍖', // 7
+            '🌿', // 8 
+            '💕', // 9
+            '❕', // 10
+            '💢', // 11
+            '💀', // 12
+            '🍷', // 13
+            '🍲', // 14
+        ].forEach((emoji) => {
+            ctx.fillText(emoji, getTileX() - 1, 20);
+        });
+        // const x = getTileX();
         // rect(3, 3, 3, x, 0);
-        ctx.fillText('🔪🩸🍖', x - 1, 19);
+        // Tile incides 5, 6, 7, 8, 9
+        // ctx.fillText('🔪🩸🍖🌿💕', x - 1, 19.5);
         // Test
-        ctx.fillText('🦀🍖🥩🍗💀🔪', 0, 44);
+        // ctx.fillText('🦀🍖🥩🍗💀🔪', 0, 44);
         // ctx.fillText('🔥', 0, 22);
         return canvas.toDataURL();
     }
@@ -826,6 +1105,7 @@
     const TILE_SIZE = win.TILE_SIZE = 24; // was 16 in demo
     const WIN_MEAT = 24;
     let wv;
+    let font;
 
     // medals
     // const medal_example = new Medal(0, 'Example Medal', 'Medal description goes here.');
@@ -836,6 +1116,7 @@
     {
         wv = win.wv = new WorldView();
         wv.init();
+        font = new FontImage;
 
         // move camera to center of collision
         cameraPos = tileCollisionSize.scale(.5);
@@ -881,21 +1162,22 @@
         ;
 
         if (keyWasReleased(13)) {
-            if (gameState === 0 || gameState === 2) {
+            if (gameState === 2 || gameState === 3) {
+                win.location.reload();
+            } else if (gameState === 0 || gameState === 2) {
                 gameState = 1;
                 wv.makePc();
             }
         }
         if (pc) {
+            win.achievements = achievements;
             cameraPos =  cameraPos.lerp(pc.pos, 0.1);
             if (pc.isDead()) gameState = 2;
             else {
                 const meat = pc.findInventoryItem('Meat');
                 const meatQuantity = meat ? meat.quantity : 0;
-                if (meatQuantity >= WIN_MEAT) {
-                    gameState = 3;
-                    achievements.award(3);
-                }
+                if (meatQuantity >= WIN_MEAT) achievements.award(5);
+                if (achievements.count() === achievements.length) gameState = 3;
             }
         }
 
@@ -925,6 +1207,38 @@
     }
 
     ///////////////////////////////////////////////////////////////////////////////
+    function renderInventory(pc) {
+        const midX = overlayCanvas.width/2;
+        // const invText = pc.inventory
+        //     .map((item) => item ? (item.name || ' ') + ' x' + item.quantity : ' ')
+        //     .map((n, i) => i + ': ' + (pc.equipIndex === i ? `[ ${n.toUpperCase()} equipped ]` : `[ ${n} ]`))
+        //     .concat(['0: [Hands]', 'E: Action'])
+        //     .join('    ');
+        // drawTextScreen(invText, vec2(midX, overlayCanvas.height - 40), 20, new Color, 4);
+
+        const equipItem = pc.inventory[pc.equipIndex];
+        const invTipText = `${equipItem ? equipItem.name : 'Nothing'} equipped, 1-9: Equip item, E: Action`;
+        // drawTextScreen(invTipText, vec2(midX, overlayCanvas.height - 40), 20, new Color, 4);
+        font.drawText(invTipText, screenToWorld(vec2(midX, overlayCanvas.height - 40)), 2/cameraScale, 1);
+
+        for(let i = 1; i <= 10; i++) {
+            const size = vec2(50, 70);
+            const pos = vec2(
+                midX - (5 * 60) + (i * 60),
+                overlayCanvas.height - 100,
+            );
+            const itemIndex = i % 10;
+            const color = (itemIndex === pc.equipIndex) ? new Color(.9,.9,.9,.3) : new Color(.1,.1,.1,.3);
+            drawRectScreenSpace(pos, size, color);
+            const item = pc.inventory[itemIndex];
+            if (item) {
+                // TODO: Switch to drawing pixelated tile
+                drawTextScreen(item.emoji, pos.add(vec2(0, -6)), 28);
+                font.drawText(''+item.quantity, screenToWorld(pos.add(vec2(5, 14))), 2/cameraScale, 1);
+            }
+        }
+    }
+
     function gameRenderPost()
     {
         const { pc } = wv;
@@ -936,7 +1250,7 @@
         const midY = overlayCanvas.height/2;
         // const r = (n) => Math.round(pc.pos[n] * 10) / 10;
         // d(`x ${r('x')}, y ${r('y')}`, vec2(midX, 80), 20, new Color, 9);
-        const font = new FontImage;
+        
 
         
         if (gameState === 2) {
@@ -945,14 +1259,10 @@
         } else if (gameState === 0) {
             font.drawText('BIT BUTCHER', cameraPos.add(vec2(0,3)), .2, 1);
             // d('BIT BUTCHER', vec2(midX, midY - 90), 90, white, 4);
-            d('Press Enter to start', vec2(midX, midY), 40, white, 4);
+            // d('Press Enter to start', vec2(midX, midY), 40, white, 4);
+            font.drawText('Press Enter to start', cameraPos.add(vec2(0, .5)), .1, 1);
         } else if (gameState === 1 || gameState === 3 && pc) {
-            const invText = pc.inventory
-                .map((item) => item ? (item.name || ' ') + ' x' + item.quantity : ' ')
-                .map((n, i) => i + ': ' + (pc.equipIndex === i ? `[ ${n.toUpperCase()} equipped ]` : `[ ${n} ]`))
-                .concat(['0: [Hands]', 'E: Action'])
-                .join('    ');
-            d(invText, vec2(midX, overlayCanvas.height - 40), 20, white, 4);
+            renderInventory(pc);
 
             achievements.forEach((a, i) => 
                 d(
@@ -973,7 +1283,7 @@
             d(`Age: ${Math.ceil(pc.age)}`, vec2(midX, 40), 20, c, 4);
             if (gameState === 3) {
                 font.drawText('YOU WIN', cameraPos.add(vec2(0,5)), .2, 1);
-                d('Refresh page to play again', vec2(midX, midY - 80), 40, white, 4);
+                d('Press Enter to play again', vec2(midX, midY - 80), 40, white, 4);
             }
         }
     }

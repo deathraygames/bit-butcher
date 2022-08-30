@@ -1,6 +1,6 @@
 import { playSound } from './sounds.js';
 import { achievements } from './achievements.js';
-import { getSpecies, drawSpecies } from './species.js';
+import { getSpecies, drawSpecies, breedSpecies } from './species.js';
 
 /** A WorldEntity is a generic "thing" that exists in the world */
 class WorldEntity extends EngineObject {
@@ -14,6 +14,7 @@ class WorldEntity extends EngineObject {
             world,
             damaging = 0,
             name = randInt(999),
+            health = 0,
         } = entOptions;
         super(pos, size, tileIndex, tileSize, angle);
         this.name = name;
@@ -21,7 +22,7 @@ class WorldEntity extends EngineObject {
         this.facing = PI; // Radians: 0 = up, PI = down
         this.direction = 4; // 0-7
         this.damageTimer = new Timer;
-        this.health = 0;
+        this.health = health;
         this.damaging = damaging;
         // 0 = up, 1 = right-up, 2 = right, 3 = right-down, 4 = down, 5 = left-down, 6 = left, 7 = left-up
         this.drawSize = vec2(1);
@@ -50,13 +51,12 @@ class WorldEntity extends EngineObject {
         this.damageTimer.set(1);
         for (const child of this.children)
             child.damageTimer && child.damageTimer.set(1);
-
         // apply damage and kill if necessary
         const newHealth = max(this.health - damage, 0);
-        if (!newHealth) this.kill(damagingObject);
-
-        // set new health and return amount damaged
-        return this.health - (this.health = newHealth);
+        const amountDamaged = this.health - newHealth;
+        this.health = newHealth;
+        if (!this.health) this.kill(damagingObject);
+        return amountDamaged;
     }
 
     isDead() { return !this.health; }
@@ -84,47 +84,57 @@ class CharacterEntity extends WorldEntity {
         this.actionTimer = new Timer;
         this.lookTimer = new Timer;
         this.planTimer = new Timer(rand(10));
-        this.fearTimer = new Timer;
         this.agingTimer = new Timer;
         this.bleedTimer = new Timer;
-        // this.drawSize = vec2(1);
+        // Emotions
+        this.emotionKey = null;
+        this.estrousTimer = new Timer; // "in heat"?
+        this.fearTimer = new Timer;
+        // Fixed values
         this.color = (new Color).setHSLA(rand(),1,.7);
-        this.species = entOptions.species || getSpecies(this.color);
+        this.bioParents = entOptions.bioParents || null;
+        this.species = entOptions.species || breedSpecies(this.bioParents) || getSpecies(this.color);
         this.renderOrder = 10;
-        this.walkCyclePercent = 0;
         this.health = 2; // TODO: 4?
-        this.maxSpeed = .1;
-        this.urgency = 1;
+        this.maxSpeed = .14;
         this.lookRange = 7;
-        this.age = 0;
         this.oldAge = Infinity;
         this.timid = false;
+        this.followsBait = false;
+        this.setCollision(1);
+        // Changeable / temp values
+        this.age = 0;
         this.walkTick = 0;
+        this.walkCyclePercent = 0;
+        this.urgency = 1;
         this.movementVelocity = vec2();
         this.moveInput = vec2();
-        this.setCollision(1);
         // New
         this.max = vec2(window.TILE_SIZE);
         // this.head = vec2(12 + randInt(12), 12 + randInt(4));
         // this.body = vec2(12 + randInt(12), 12 + randInt(4));
-        this.head = vec2(0.5, 0.3);
-        this.body = vec2(0.6, 0.3);
-        this.legs = [
-            // hip, knee, foot
-            [vec2(-.2, -.1), vec2(-.3, -.3), vec2(-.2, -.5)],
-            [vec2(.2, -.1), vec2(.3, -.3), vec2(.2, -.5)],
-        ];
+        // this.head = vec2(0.5, 0.3);
+        // this.body = vec2(0.6, 0.3);
+        // this.legs = [
+        //     // hip, knee, foot
+        //     [vec2(-.2, -.1), vec2(-.3, -.3), vec2(-.2, -.5)],
+        //     [vec2(.2, -.1), vec2(.3, -.3), vec2(.2, -.5)],
+        // ];
         this.drawScale = this.drawSize.x / this.size.x;
         this.inventory = [,,,,,,,,,,];
         this.equipIndex = -1;
         this.equippedEntity = null;
         this.walkTarget = null; // vec2();
 
+        this.addChild(this.emotionEntity = new WorldEntity({ tileIndex: 9 }));
+        this.emotionEntity.localPos = vec2(0, 1.2);
+        this.setEmotion();
+
         this.addChild(this.bloodEmitter = new ParticleEmitter(
             vec2(), 0, 0, 0, 0, PI,  // pos, angle, emitSize, emitTime, emitRate, emiteCone
             undefined, undefined, // tileIndex, tileSize
-            new Color(1,.2,.2), new Color(.9,.2,.2), // colorStartA, colorStartB
-            new Color(1,.3,.3), new Color(.9,.3,.3), // colorEndA, colorEndB
+            new Color(1,.2,.2), new Color(.5,.1,.1), // colorStartA, colorStartB
+            new Color(.4,.1,.1), new Color(.4,.2,.2,.3), // colorEndA, colorEndB
             5, .2, .1, .07, .1, // particleTime, sizeStart, sizeEnd, particleSpeed, particleAngleSpeed
             .95, .95, 1, PI, .01,    // damping, angleDamping, gravityScale, particleCone, fadeRate, 
             .2, 1              // randomness, collide, additive, randomColorLinear, renderOrder
@@ -133,21 +143,40 @@ class CharacterEntity extends WorldEntity {
         // this.bloodEmitter.particleDestroyCallback = persistentParticleDestroyCallback;
     }
 
+    setEmotion(emotionKey) {
+        const emotionTiles = { estrous: 9, fear: 10, anger: 11, dead: 12 };
+        this.emotionEntity.drawSize = vec2(emotionKey ? 1 : 0);
+        if (!emotionKey) return;
+        this.emotionEntity.tileIndex = emotionTiles[emotionKey];
+    }
+
+    updateEmotion() {
+        if (this.isDead()) this.emotionKey = 'dead';
+        else {
+            const estrous = -1 * this.estrousTimer.get();
+            const fear = -1 * this.fearTimer.get();
+            if (estrous > 0 && estrous > fear) this.emotionKey = 'estrous';
+            else if (fear > 0) this.emotionKey = 'fear';
+            else this.emotionKey = null;
+        }
+        this.setEmotion(this.emotionKey);
+    }
+
     damage(damage, damagingObject) {
         const actualDmg = super.damage(damage, damagingObject);
-        if (actualDmg <= 0) return;
+        if (actualDmg <= 0) return 0;
         playSound('hit', this.pos);
-        // if (damagingObject && damagingObject.pos) {
-        //     // this.velocity.add(this.pos.subtract(damagingObject.pos).scale(100));
-        //     this.velocity.add(vec2(0, 1000));
-        // }
+        if (damagingObject && damagingObject.pos) {
+            this.velocity = this.velocity.add(this.pos.subtract(damagingObject.pos).scale(rand(.4, .8)));
+        }
         this.bleed();
         this.lookTimer.unset();
+        return actualDmg;
     }
 
     bleed() {
         if (this.bleedTimer.active()) return;
-        this.bleedTimer.set(.2);
+        this.bleedTimer.set(this.isDead() ? .5 : .2);
         this.bloodEmitter.emitRate = 100;
     }
 
@@ -170,6 +199,10 @@ class CharacterEntity extends WorldEntity {
         return (i < 0) ? null : this.inventory[i];
     }
 
+    getEquippedItem() {
+        return this.inventory[this.equipIndex];
+    }
+
     pickup(item, invIndex) {
         if (typeof invIndex !== 'number') {
             invIndex = this.findOpenInventoryIndex(item.name);
@@ -181,6 +214,7 @@ class CharacterEntity extends WorldEntity {
         } else {
             this.inventory[invIndex] = item;
         }
+        playSound('pickup', this.pos);
         return true;
     }
 
@@ -206,6 +240,12 @@ class CharacterEntity extends WorldEntity {
         this.equippedEntity = item.entity;
     }
 
+    hasBaitEquipped() {
+        const item = this.getEquippedItem();
+        if (!item) return; // creature is not holding item
+        return item.bait || 0;
+    }
+
     attack() {
         // const s = new Sound([.5,.5]);
         // s.play(this.pos);
@@ -213,12 +253,74 @@ class CharacterEntity extends WorldEntity {
         // this.damage(1);
     }
 
-    action() {
+    getNearest(things = [], targetPos) {
+        let nearest;
+        const bestDistance = things.reduce((best, a) => {
+            const dist = a.pos.distance(targetPos);
+            if (dist < best) {
+                nearest = a;
+                return dist;
+            }
+            return best;
+        }, Infinity);
+        return nearest;
+    }
+
+    findNearestAnimal(nearestPos = this.pos) {
+        const aliveAnimals = this.world.animals.filter((a) => !a.isDead() && a !== this);
+        const ee = this.equippedEntity;
+        const interactingAnimals = aliveAnimals.filter((a) => isOverlapping(a.pos, a.size, ee.pos, ee.size));
+        return this.getNearest(interactingAnimals, nearestPos);
+    }
+
+    feedNearest(nearestPos = this.pos) {
+        const nearestAnimal = this.findNearestAnimal(nearestPos);
+        if (!nearestAnimal) return;
+        nearestAnimal.health += 1;
+        nearestAnimal.estrousTimer.set(10);
+    }
+
+    craft(itemKey) {
+        const equippedItem = this.getEquippedItem();
+        if (itemKey === 'wine') {
+            if (equippedItem.name !== 'Blood' || equippedItem.quantity < 10) {
+                playSound('dud', this.pos);
+                return;
+            }
+            equippedItem.quantity -= 10;
+            achievements.award(4);
+            this.world.makeItem('wine', this.pos, 2);
+            playSound('craft');
+        } else if (itemKey === 'meal') {
+            if (equippedItem.name !== 'Meat' || equippedItem.quantity < 24) {
+                playSound('dud', this.pos);
+                return;
+            }
+            equippedItem.quantity -= 24;
+            this.world.makeItem('meal', this.pos, 2);
+            playSound('craft', this.pos);
+        }
+    }
+
+    consume(equippedItem) {
+        if (equippedItem.quantity <= 0) return;
+        equippedItem.quantity -= 1;
+        this.health += 1;
+        this.age -= (equippedItem.youth || 0);
+        if (equippedItem.name === 'Meal') achievements.award(6);
+        playSound('consume', this.pos);
+    }
+
+    action(targetPos) {
         if (this.actionTimer.active()) return;
-        const equippedItem = this.inventory[this.equipIndex];
+        const equippedItem = this.getEquippedItem();
         this.actionTimer.set(.25);
         if (!equippedItem) return; // this.pickupNearby();
         if (equippedItem.type === 'w') return this.attack();
+        if (equippedItem.bait) return this.feedNearest(targetPos);
+        if (equippedItem.name === 'Blood') this.craft('wine');
+        if (equippedItem.name === 'Meat') this.craft('meal');
+        else if (equippedItem.consumable) this.consume(equippedItem);
     }
 
     plan() {
@@ -232,24 +334,70 @@ class CharacterEntity extends WorldEntity {
 
     look() {
         if (this.lookTimer.active()) return;
-        if (!this.timid) return;
-        const scaryEnt = this.world.animals.find((a) => a.scary && !a.isDead());
-        if (!scaryEnt) return;
+        const fear = this.lookScary();
+        if (this.estrousTimer.active()) this.lookMate();
+        else if (!fear) this.lookFood();
+    }
+
+    lookScary() {
+        if (!this.timid) return 0;
+        const scaryEnt = this.world.animals.find((a) => a.scary && !a.isDead() && !a.hasBaitEquipped() && a !== this);
+        if (!scaryEnt) return 0;
         const dist = scaryEnt.pos.distance(this.pos);
-        if (dist > this.lookRange) return; // player is out of sight/smell
+        if (dist > this.lookRange) return 0; // player is out of sight/smell
         const FEAR_DIST = 6;
         const fear = dist < FEAR_DIST;
         this.lookTimer.set(fear ? .5 : rand(.5, 2));
+        this.fearTimer.set(1);
         if (fear) {
             const goto = this.pos.subtract(scaryEnt.pos).normalize(FEAR_DIST + 1);
             this.walkTarget = this.pos.add(goto);
             this.urgency = 1;
         }
+        return fear;
+    }
+
+    lookFood() {
+        if (!this.followsBait) return;
+        const pc = this.findPc();
+        if (!pc) return;
+        const dist = pc.pos.distance(this.pos);
+        const LOOK_FOOD_DIST = 4;
+        if (dist > this.lookRange || dist > LOOK_FOOD_DIST) return; // player is out of sight/smell
+        const item = pc.getEquippedItem();
+        if (!item) return; // player is not holding food
+        if (pc.hasBaitEquipped()) {
+            this.walkTarget = item.entity.pos.add( vec2().setAngle(rand(2 * PI), rand(1, 2)) );
+        }
+    }
+
+    lookMate() {
+        if (!this.estrousTimer.active()) return;
+        this.lookTimer.set(1);
+        const mates = this.world.animals.filter((a) => !a.isDead() && a.estrousTimer.active() && a !== this);
+        console.log(mates);
+        if (!mates.length) return;
+        const nearestMate = this.getNearest(mates, this.pos);
+        console.log(nearestMate);
+        if (!nearestMate) return;
+        // TODO: don't do the mating in the looking?
+        if (isOverlapping(nearestMate.pos, nearestMate.size, this.pos, this.size)) this.mate(nearestMate);
+        else this.walkTarget = nearestMate.pos;
+    }
+
+    mate(mate) {
+        this.lookTimer.set(5);
+        mate.estrousTimer.unset();
+        this.estrousTimer.unset();
+        achievements.award(3);
+        this.world.makeAnimal(this.pos, [this.species, mate.species])
     }
 
     getOlder() {
         if (this.agingTimer.active()) return false;
-        this.agingTimer.set(6); // 600 sec = 10 minutes --> @6 sec/year --> 10 minutes = 100 years
+        // @ 6 sec/year --> 10 minutes IRL = 600 sec IRL = 100 years
+        // @ 3 sec/year --> 5 minutes IRL = 100 years
+        this.agingTimer.set(2);
         this.age += 1;
         if (this.isOld()) this.damage(1, this);
     }
@@ -267,33 +415,34 @@ class CharacterEntity extends WorldEntity {
         }
         this.look();
         this.plan();
-        if (this.walkTarget && !isMoveInput) {
+
+        // Movement
+        this.movementVelocity = this.velocity.copy();
+        if (isMoveInput) {
+            const runInput = moveInput.scale(.04 * this.urgency);
+            this.movementVelocity = this.movementVelocity.add(runInput);
+            // this.movementVelocity = runInput;
+            // if (!this.groundTimer.isSet()) playSound('walk', this.pos);
+            // this.groundTimer.set(.1);
+        } else if (this.walkTarget) {
             const dist = this.pos.distance(this.walkTarget);
             if (dist > 2) {
-                this.velocity = this.velocity.lerp(this.walkTarget.subtract(this.pos), 0.5);
-                // this.movementVelocity = this.movementVelocity.lerp(this.walkTarget.subtract(this.pos), 0.5);
+                this.movementVelocity = this.movementVelocity.lerp(this.walkTarget.subtract(this.pos), 0.5);
             }
-        } else {
-            // apply movement acceleration and clamp
-            // const runInput = moveInput.scale(.04 * this.urgency);
-            // // this.movementVelocity = this.movementVelocity.add(runInput);
-            // this.movementVelocity = runInput;
         }
-        // apply movement acceleration and clamp
-        const runInput = moveInput.scale(.04 * this.urgency);
-        this.velocity = this.velocity.add(runInput);
-
         const maxSpd = this.maxSpeed * this.urgency;
-        // this.movementVelocity.x = clamp(this.movementVelocity.x, -maxSpd, maxSpd);
-        // this.movementVelocity.y = clamp(this.movementVelocity.y, -maxSpd, maxSpd);
-        // this.walkTick += this.movementVelocity.length() * 3;
+        // TODO: use this.movementVelocity.clampLength(); -- but needs tweaking the max speed
+        this.movementVelocity.x = clamp(this.movementVelocity.x, -maxSpd, maxSpd);
+        this.movementVelocity.y = clamp(this.movementVelocity.y, -maxSpd, maxSpd);
         // // Only use movement velocity if you're currently moving slower
-        // if (this.velocity.x > -maxSpd && this.velocity.x < maxSpd) this.velocity.x += this.movementVelocity.x;
-        // if (this.velocity.y > -maxSpd && this.velocity.y < maxSpd) this.velocity.y += this.movementVelocity.y;
-        this.velocity.x = clamp(this.velocity.x, -maxSpd, maxSpd);
-        this.velocity.y = clamp(this.velocity.y, -maxSpd, maxSpd);
+        this.velocity = vec2(
+            (this.velocity.x > maxSpd || this.velocity.x < -maxSpd) ? this.velocity.x : this.movementVelocity.x,
+            (this.velocity.y > maxSpd || this.velocity.y < -maxSpd) ? this.velocity.y : this.movementVelocity.y,
+        );
 
         const speed = this.velocity.length();
+        // TODO: clean this up - redundant?
+        this.walkTick += this.movementVelocity.length() * 3.5;
         this.walkCyclePercent += speed * .5;
         this.walkCyclePercent = speed > .01 ? mod(this.walkCyclePercent) : 0;
         // Facing
@@ -303,6 +452,7 @@ class CharacterEntity extends WorldEntity {
     }
 
     update() {
+        this.updateEmotion();
         this.live();
         this.clot();
         // TODO: Always apply friction?
@@ -317,7 +467,7 @@ class CharacterEntity extends WorldEntity {
     render() {
         let bodyPos = this.pos;
         bodyPos = bodyPos.add(vec2(0,.05*Math.sin(this.walkCyclePercent*PI)));
-        const color = this.color.add(this.additiveColor).clamp();
+        // const color = this.color.add(this.additiveColor).clamp();
         drawSpecies(mainContext, bodyPos, this.species, this.direction, this.walkTick);
         // drawRect(bodyPos, this.size.scale(this.drawScale), new Color(.3, .3, .3, .4), this.angle);
         return;
@@ -328,7 +478,7 @@ class CharacterEntity extends WorldEntity {
         drawRect(bodyPos.add(vec2(0, 0)), this.body, color, this.angle);
         drawRect(bodyPos.add(vec2(0, .3)), this.head, color, this.angle);
         this.legs.forEach((leg, li) => {
-            // console.log(this.walkCyclePercent);
+            // console.log(this.walkCyclePercent);s
             // TODO: Fix this walking animation
             const liftPercent = Math.sin((this.walkCyclePercent + (.1 * li)) * PI); 
             const lift = vec2(0, .2 * liftPercent);
@@ -370,7 +520,7 @@ class PlayerCharacterEntity extends CharacterEntity {
         numKeyCodes.forEach((n) => { if (keyIsDown(n)) this.equip(n - 48); });
 
         if (keyIsDown(81) || gamepadIsDown(1)) this.throw();
-        if (keyIsDown(69) || mouseIsDown(0) || gamepadIsDown(0)) this.action();
+        if (keyIsDown(69) || mouseIsDown(0) || gamepadIsDown(0)) this.action(mousePos);
 
         // movement control
         this.moveInput = isUsingGamepad ? gamepadStick(0) : 
@@ -388,6 +538,11 @@ class PlayerCharacterEntity extends CharacterEntity {
             const thrust = this.actionTimer.active() ? 1 : .7;
             ee.drawSize = vec2(this.actionTimer.active() ? 1.2 : 1);
             ee.localPos = vec2().setAngle(this.facing, thrust);
+            let offset = vec2();
+            if (this.direction === 0) offset = vec2(.35, -.1);
+            else if (this.direction === 1) offset = vec2(.2, -.2);
+            else if (this.direction === 7) offset = vec2(-.2, -.1);
+            ee.localPos = ee.localPos.add(offset);
             ee.localAngle = this.facing + (PI * 1.2);
             ee.renderOrder = (ee.pos.y < this.pos.y) ? 11 : 9;
         }
@@ -399,16 +554,17 @@ class AnimalEntity extends CharacterEntity {
     constructor(entOptions) {
         super(entOptions);
         this.timid = true;
+        this.followsBait = true;
     }
 
     kill() {
         playSound('hit', this.pos);
         this.health = 0;
-        const pc = this.findPc();
-        if (pc) pc.pickup(this.world.itemTypes.meat);
-        this.angle = PI;
+        // this.angle = .1;
         this.bleed();
+        this.setEmotion('dead');
         // Not sure if setTimeout is the best approach in this framework
+        setTimeout(() => this.world.makeItem('meat', this.pos, 1), 500);
         setTimeout(() => super.kill(), 4000);
     }
 
@@ -426,4 +582,31 @@ class AnimalEntity extends CharacterEntity {
     }
 }
 
-export { PlayerCharacterEntity, CharacterEntity, AnimalEntity }
+class ItemEntity extends WorldEntity {
+    constructor(entOptions) {
+        super(entOptions);
+        this.itemType = entOptions.itemType;
+        this.tileIndex = this.itemType.tileIndex;
+        this.fadeTimer = new Timer;
+    }
+
+    update() {
+        super.update();
+        const pc = this.findPc();
+        if (this.isDead()) {
+            this.drawSize = vec2(1 - this.fadeTimer.getPercent());
+            if (pc) this.pos = this.pos.lerp(pc.pos, .1);
+        } else if (pc) {
+            if (isOverlapping(this.pos, this.size, pc.pos, pc.size)) {
+                // achievements.award(2);
+                // const dmg = this.damage(pc.equippedEntity.damaging, pc.equippedEntity);
+                pc.pickup(this.itemType);
+                this.health = 0;
+                this.fadeTimer.set(.4);
+                setTimeout(() => this.kill(), 400);
+            }
+        }
+    }
+}
+
+export { PlayerCharacterEntity, CharacterEntity, AnimalEntity, ItemEntity }

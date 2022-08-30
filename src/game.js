@@ -12,6 +12,7 @@ let gameState = 0; // 0 = not begun, 1 = alive & running, 2 = dead, 3 = win
 const TILE_SIZE = win.TILE_SIZE = 24; // was 16 in demo
 const WIN_MEAT = 24;
 let wv;
+let font;
 
 // medals
 // const medal_example = new Medal(0, 'Example Medal', 'Medal description goes here.');
@@ -22,6 +23,7 @@ function gameInit()
 {
     wv = win.wv = new WorldView();
     wv.init();
+    font = new FontImage;
 
     // move camera to center of collision
     cameraPos = tileCollisionSize.scale(.5);
@@ -81,21 +83,22 @@ function gameUpdate()
     }
 
     if (keyWasReleased(13)) {
-        if (gameState === 0 || gameState === 2) {
+        if (gameState === 2 || gameState === 3) {
+            win.location.reload();
+        } else if (gameState === 0 || gameState === 2) {
             gameState = 1;
             wv.makePc();
         }
     }
     if (pc) {
+        win.achievements = achievements;
         cameraPos =  cameraPos.lerp(pc.pos, 0.1);
         if (pc.isDead()) gameState = 2;
         else {
             const meat = pc.findInventoryItem('Meat');
             const meatQuantity = meat ? meat.quantity : 0;
-            if (meatQuantity >= WIN_MEAT) {
-                gameState = 3;
-                achievements.award(3);
-            }
+            if (meatQuantity >= WIN_MEAT) achievements.award(5);
+            if (achievements.count() === achievements.length) gameState = 3;
         }
     }
 
@@ -125,6 +128,38 @@ function gameRender()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+function renderInventory(pc) {
+    const midX = overlayCanvas.width/2;
+    // const invText = pc.inventory
+    //     .map((item) => item ? (item.name || ' ') + ' x' + item.quantity : ' ')
+    //     .map((n, i) => i + ': ' + (pc.equipIndex === i ? `[ ${n.toUpperCase()} equipped ]` : `[ ${n} ]`))
+    //     .concat(['0: [Hands]', 'E: Action'])
+    //     .join('    ');
+    // drawTextScreen(invText, vec2(midX, overlayCanvas.height - 40), 20, new Color, 4);
+
+    const equipItem = pc.inventory[pc.equipIndex];
+    const invTipText = `${equipItem ? equipItem.name : 'Nothing'} equipped, 1-9: Equip item, E: Action`;
+    // drawTextScreen(invTipText, vec2(midX, overlayCanvas.height - 40), 20, new Color, 4);
+    font.drawText(invTipText, screenToWorld(vec2(midX, overlayCanvas.height - 40)), 2/cameraScale, 1);
+
+    for(let i = 1; i <= 10; i++) {
+        const size = vec2(50, 70);
+        const pos = vec2(
+            midX - (5 * 60) + (i * 60),
+            overlayCanvas.height - 100,
+        );
+        const itemIndex = i % 10;
+        const color = (itemIndex === pc.equipIndex) ? new Color(.9,.9,.9,.3) : new Color(.1,.1,.1,.3);
+        drawRectScreenSpace(pos, size, color);
+        const item = pc.inventory[itemIndex];
+        if (item) {
+            // TODO: Switch to drawing pixelated tile
+            drawTextScreen(item.emoji, pos.add(vec2(0, -6)), 28);
+            font.drawText(''+item.quantity, screenToWorld(pos.add(vec2(5, 14))), 2/cameraScale, 1);
+        }
+    }
+}
+
 function gameRenderPost()
 {
     const { pc } = wv;
@@ -136,7 +171,7 @@ function gameRenderPost()
     const midY = overlayCanvas.height/2;
     // const r = (n) => Math.round(pc.pos[n] * 10) / 10;
     // d(`x ${r('x')}, y ${r('y')}`, vec2(midX, 80), 20, new Color, 9);
-    const font = new FontImage;
+    
 
     
     if (gameState === 2) {
@@ -145,14 +180,10 @@ function gameRenderPost()
     } else if (gameState === 0) {
         font.drawText('BIT BUTCHER', cameraPos.add(vec2(0,3)), .2, 1);
         // d('BIT BUTCHER', vec2(midX, midY - 90), 90, white, 4);
-        d('Press Enter to start', vec2(midX, midY), 40, white, 4);
+        // d('Press Enter to start', vec2(midX, midY), 40, white, 4);
+        font.drawText('Press Enter to start', cameraPos.add(vec2(0, .5)), .1, 1);
     } else if (gameState === 1 || gameState === 3 && pc) {
-        const invText = pc.inventory
-            .map((item) => item ? (item.name || ' ') + ' x' + item.quantity : ' ')
-            .map((n, i) => i + ': ' + (pc.equipIndex === i ? `[ ${n.toUpperCase()} equipped ]` : `[ ${n} ]`))
-            .concat(['0: [Hands]', 'E: Action'])
-            .join('    ');
-        d(invText, vec2(midX, overlayCanvas.height - 40), 20, white, 4);
+        renderInventory(pc);
 
         achievements.forEach((a, i) => 
             d(
@@ -173,7 +204,7 @@ function gameRenderPost()
         d(`Age: ${Math.ceil(pc.age)}`, vec2(midX, 40), 20, c, 4);
         if (gameState === 3) {
             font.drawText('YOU WIN', cameraPos.add(vec2(0,5)), .2, 1);
-            d('Refresh page to play again', vec2(midX, midY - 80), 40, white, 4);
+            d('Press Enter to play again', vec2(midX, midY - 80), 40, white, 4);
         }
     }
 }

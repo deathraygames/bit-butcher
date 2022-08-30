@@ -1,20 +1,22 @@
-import { PlayerCharacterEntity, AnimalEntity } from './entities.js';
+import { PlayerCharacterEntity, AnimalEntity, ItemEntity } from './entities.js';
 
 const WORLD_SIZE = 100;
 
 function worldInit() {
     return {
-        seed: 123,
+        // seed: 123,
         size: vec2(WORLD_SIZE, WORLD_SIZE),
         blocks: [],
         items: [],
         animals: [],
         species: [],
         itemTypes: {
-            meat: { name: 'Meat', tileIndex: 7, quantity: 1, stack: 64 },
-            blood: { name: 'Blood', tileIndex: 6, quantity: 1, stack: 64 },
-            knife: { name: 'Butcher knife', type: 'w', tileIndex: 5, quantity: 1, stack: 1, damaging: 1 },
-            bait: { name: 'Bait', type: 'b', tileIndex: 0, quantity: 1, stack: 64 },
+            meat: { name: 'Meat', tileIndex: 7, quantity: 1, stack: 64, emoji: '🍖' },
+            blood: { name: 'Blood', tileIndex: 6, quantity: 1, stack: 64, emoji: '🩸' },
+            knife: { name: 'Butcher knife', type: 'w', tileIndex: 5, quantity: 1, stack: 8, damaging: 1, emoji: '🔪' },
+            herb: { name: 'Herb', type: 'b', tileIndex: 8, quantity: 1, stack: 64, bait: 1, emoji: '🌿' },
+            wine: { name: 'Blood wine', tileIndex: 13, quantity: 1, stack: 64, youth: 10, consumable: 1, emoji: '🍷' },
+            meal: { name: 'Meal', tileIndex: 14, quantity: 1, stack: 8, youth: 1, consumable: 1, emoji: '🍲' },
         },
     };
 }
@@ -26,23 +28,46 @@ function makeSpecies() {
 class WorldView {
     constructor() {
         this.world = worldInit();
+        this.world.makeAnimal = (...args) => this.makeAnimal(...args);
+        this.world.makeItem = (...args) => this.makeItem(...args);
         this.tiles = [];
         this.pc = 0;
+        this.center = vec2();
     }
 
-    makePc() {
+    makePc(pos = this.center.copy()) {
         const { world } = this
-        this.pc = new PlayerCharacterEntity({ pos: world.size.scale(.5), world });
-        this.pc.pickup(world.itemTypes.knife);
-        // pc.pickup(world.itemTypes.meat);
-        // pc.pickup(world.itemTypes.blood);
+        this.pc = new PlayerCharacterEntity({ pos, world });
         world.animals.push(this.pc);
         return this.pc;
     }
 
+    makeItem(itemTypeParam, posParam, dist = 0) {
+        const itemType = (typeof itemTypeParam === 'string') ? this.world.itemTypes[itemTypeParam] : itemTypeParam;
+        const pos = (dist) ? posParam.add( vec2(rand(-dist, dist), rand(-dist, dist)) ) : posParam.copy();
+        const { world } = this;
+        world.items.push(new ItemEntity({
+            itemType,
+            pos,
+            health: 1,
+            world,
+        }));     
+    }
+
+    makeAnimal(pos, bioParents) {
+        const { world } = this;
+        world.animals.push(new AnimalEntity({
+            tileIndex: 0,
+            pos,
+            world,
+            bioParents,
+        }));
+    }
+
     init() {
         const { world } = this;
-        const { size, species, animals } = world;
+        const { size, species, animals, items } = world;
+        this.center = world.size.scale(.5);
         // const pc = this.makePc();
 
         let i;
@@ -50,13 +75,23 @@ class WorldView {
         for(i = 20; i--;) {
             // TODO: pick a random species
             for(let q = 2; q--;) {
-                animals.push(new AnimalEntity({
-                    tileIndex: 0,
-                    pos: vec2(rand(0, WORLD_SIZE), rand(0, WORLD_SIZE)),
-                    world,
-                }));
+                this.makeAnimal(vec2(rand(WORLD_SIZE), rand(WORLD_SIZE)));
             }
         }
+
+        const getNear =  (n) => this.center.add( vec2().setAngle(rand(2 * PI), n) );
+        this.makeItem(world.itemTypes.knife, getNear(10));
+        [20, WORLD_SIZE/2, rand(20, WORLD_SIZE/2)].forEach((n) =>
+            this.makeItem(world.itemTypes.herb, getNear(n))
+        );
+        // for(i = 1; i--;) {
+        //     items.push(new ItemEntity({
+        //         itemType: world.itemTypes.knife,
+        //         pos: near,
+        //         health: 1,
+        //         world,
+        //     }));
+        // }
         
         // this.animals.push
         

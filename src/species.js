@@ -1,5 +1,6 @@
 const size = 24;
 const ri = randInt;
+const MUTANT_CHANCE = 20; // 1 out of 20
 
 function fixPoint(n) {
 	return Math.max(Math.min(Math.round(n), size), 0);
@@ -48,21 +49,47 @@ function getSpecies(color) {
 	};
 }
 
+function breedRandomValue(bioParents, key) {
+	// First parent in array is considered the dominant parent
+	const dominantParentValue = bioParents[0][key];
+	// If it's a number value, then determine randomly
+	if (typeof dominantParentValue === 'number') {
+		const range = bioParents.reduce((rangeArr, species) => {
+			const value = species[key];
+			if (value < rangeArr[0]) rangeArr[0] = value;
+			if (value > rangeArr[1]) rangeArr[1] = value;
+			return rangeArr;
+		}, [Infinity, -Infinity]); // index 0 is min, index 1 is max
+		return ri(range[0], range[1]);
+	}
+	// Otherwise just use the dom parent's value e.g. for colors
+	return dominantParentValue;
+}
+
+function breedSpecies(bioParents) {
+	if (!bioParents) return;
+	const newDna = getSpecies();
+	Object.keys(newDna).forEach((key) => {
+		if (ri(MUTANT_CHANCE) > 0) newDna[key] = breedRandomValue(bioParents, key);
+	});
+	return newDna;
+}
+
 function getLegPoints(x, y, kneeY, legWidth, kneeBend, kneeWidth, lift) {
 	const len = size - y;
-  const liftAmount = Math.floor((len / 2) * lift);
-  const footY = size - liftAmount;
-  const liftKneeY = kneeY - (liftAmount / 2);
-  // TODO: This is not symmmetric, doesn't look correct when leg is pointing right
-  const kneeX = Math.max(0, x + kneeBend + (kneeBend * lift));
-	return [
-  	x, y, // hip - top left
-    x + legWidth, y, // hip - top right
-    kneeX + kneeWidth, liftKneeY, // right side of knee (back if left)
-    x + legWidth, footY, // foot (heel if left)
-    x, footY, // foot - toe
-    kneeX, liftKneeY, // knee
-  ];
+	const liftAmount = Math.floor((len / 2) * lift);
+	const footY = size - liftAmount;
+	const liftKneeY = kneeY - (liftAmount / 2);
+	// TODO: This is not symmmetric, doesn't look correct when leg is pointing right
+	const kneeX = Math.max(0, x + kneeBend + (kneeBend * lift));
+		return [
+		x, y, // hip - top left
+		x + legWidth, y, // hip - top right
+		kneeX + kneeWidth, liftKneeY, // right side of knee (back if left)
+		x + legWidth, footY, // foot (heel if left)
+		x, footY, // foot - toe
+		kneeX, liftKneeY, // knee
+	];
 }
 
 function drawSpecies(ctx, pos, species, direction = 4, t = 0) {
@@ -191,4 +218,4 @@ function drawPart(ctx, x, y, part, color) {
 	);
 }
 
-export { getSpecies, drawSpecies };
+export { getSpecies, breedSpecies, drawSpecies };
