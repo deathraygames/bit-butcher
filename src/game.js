@@ -1,4 +1,4 @@
-import { WorldView } from './world.js';
+import { World } from './world.js';
 import { loadTileImageSource } from './tiles.js';
 import { achievements } from './achievements.js';
 
@@ -11,7 +11,7 @@ const win = window;
 let gameState = 0; // 0 = not begun, 1 = alive & running, 2 = dead, 3 = win
 const TILE_SIZE = win.TILE_SIZE = 24; // was 16 in demo
 const WIN_MEAT = 24;
-let wv;
+let w;
 let font;
 
 // medals
@@ -21,8 +21,8 @@ let font;
 ///////////////////////////////////////////////////////////////////////////////
 function gameInit()
 {
-    wv = win.wv = new WorldView();
-    wv.init();
+    w = win.w = win.world = new World();
+    w.init();
     font = new FontImage;
 
     // move camera to center of collision
@@ -33,18 +33,18 @@ function gameInit()
     gravity = 0; // -.01;
 
     // create particle emitter
-    const emPos = vec2(10, 12);
-    particleEmiter = new ParticleEmitter(
-        emPos, 0, 1, 0, 200, PI, // pos, angle, emitSize, emitTime, emitRate, emiteCone
-        0, vec2(TILE_SIZE),                            // tileIndex, tileSize
-        new Color(1,1,1),   new Color(0,0,0),   // colorStartA, colorStartB
-        new Color(1,1,1,0), new Color(0,0,0,0), // colorEndA, colorEndB
-        2, .2, .2, .1, .05,     // particleTime, sizeStart, sizeEnd, particleSpeed, particleAngleSpeed
-        .99, 1, .5, PI, .05,     // damping, angleDamping, gravityScale, particleCone, fadeRate, 
-        .5, 1, 1                // randomness, collide, additive, randomColorLinear, renderOrder
-    );
-    particleEmiter.elasticity = .3; // bounce when it collides
-    particleEmiter.trailScale = 2;  // stretch in direction of motion
+    // const emPos = vec2(10, 12);
+    // particleEmiter = new ParticleEmitter(
+    //     emPos, 0, 1, 0, 200, PI, // pos, angle, emitSize, emitTime, emitRate, emiteCone
+    //     0, vec2(TILE_SIZE),                            // tileIndex, tileSize
+    //     new Color(1,1,1),   new Color(0,0,0),   // colorStartA, colorStartB
+    //     new Color(1,1,1,0), new Color(0,0,0,0), // colorEndA, colorEndB
+    //     2, .2, .2, .1, .05,     // particleTime, sizeStart, sizeEnd, particleSpeed, particleAngleSpeed
+    //     .99, 1, .5, PI, .05,     // damping, angleDamping, gravityScale, particleCone, fadeRate, 
+    //     .5, 1, 1                // randomness, collide, additive, randomColorLinear, renderOrder
+    // );
+    // particleEmiter.elasticity = .3; // bounce when it collides
+    // particleEmiter.trailScale = 2;  // stretch in direction of motion
 
 
     // console.log(tileImage.src);
@@ -63,10 +63,9 @@ function gameInit()
 ///////////////////////////////////////////////////////////////////////////////
 function gameUpdate()
 {
-    const { pc } = wv;
+    const { pc } = w;
     if (pc !== win.pc) win.pc = pc; // Just for easy debugging
-    if (mouseWasPressed(0))
-    {
+    // if (mouseWasPressed(0)) {
         // achievements.award(0);
         // if (pc) pc.damage(1, pc);
         // play sound when mouse is pressed
@@ -80,19 +79,21 @@ function gameUpdate()
 
         // unlock medals
         // medal_example.unlock();
-    }
+        // console.log(mousePos);
+    // }
 
     if (keyWasReleased(13)) {
         if (gameState === 2 || gameState === 3) {
             win.location.reload();
         } else if (gameState === 0 || gameState === 2) {
             gameState = 1;
-            wv.makePc();
+            w.makePc();
         }
     }
     if (pc) {
         win.achievements = achievements;
         cameraPos =  cameraPos.lerp(pc.pos, 0.1);
+        // cameraPos =  cameraPos.lerp(w.spirits[0].pos, 0.1);
         if (pc.isDead()) gameState = 2;
         else {
             const meat = pc.findInventoryItem('Meat');
@@ -109,9 +110,9 @@ function gameUpdate()
         // particleEmiter.pos = pc.pos;
     // }as
 
-    cameraScale = clamp(cameraScale*(1-mouseWheel/10), 1, 1e3);
+    cameraScale = clamp(cameraScale*(1-mouseWheel/10), 3, 700);
     
-    // if (wv) wv.update();
+    if (w) w.update();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -162,13 +163,14 @@ function renderInventory(pc) {
 
 function gameRenderPost()
 {
-    const { pc } = wv;
+    const { pc } = w;
     const d = drawTextScreen;
     const white = new Color;
     // draw to overlay canvas for hud rendering
     // d('Hello World 🦀', vec2(overlayCanvas.width/2, 80), 80, new Color, 9);
     const midX = overlayCanvas.width/2;
     const midY = overlayCanvas.height/2;
+    const pxFontSize = overlayCanvas.width / 8000;
     // const r = (n) => Math.round(pc.pos[n] * 10) / 10;
     // d(`x ${r('x')}, y ${r('y')}`, vec2(midX, 80), 20, new Color, 9);
     
@@ -178,17 +180,18 @@ function gameRenderPost()
         d('YOU DIED', vec2(midX, midY - 90), 90, new Color(1, 0, 0), 4);
         d('Press Enter to restart', vec2(midX, midY), 40, new Color(1, .5, .5), 4);
     } else if (gameState === 0) {
-        font.drawText('BIT BUTCHER', cameraPos.add(vec2(0,3)), .2, 1);
+        // overlayCanvas.width
+        font.drawText('BIT BUTCHER', cameraPos.add(vec2(0,6)), pxFontSize, 1);
         // d('BIT BUTCHER', vec2(midX, midY - 90), 90, white, 4);
         // d('Press Enter to start', vec2(midX, midY), 40, white, 4);
-        font.drawText('Press Enter to start', cameraPos.add(vec2(0, .5)), .1, 1);
+        font.drawText('Press Enter to start', cameraPos.add(vec2(0, .4)), pxFontSize / 2, 1);
     } else if (gameState === 1 || gameState === 3 && pc) {
         renderInventory(pc);
 
         achievements.forEach((a, i) => 
             d(
                 `[${a[1] ? 'X' : ' '}] ` + a[0],
-                vec2(overlayCanvas.width - 260, 100 + (i * 30)),
+                vec2(overlayCanvas.width - 300, 100 + (i * 30)),
                 18,
                 a[1] ? new Color(.4,1,.4,.5) : white,
                 4,

@@ -33,8 +33,8 @@ function drawTerrain(r, g, b) {
 function drawRockyTerrain(r, g, b) {
     const x = drawTerrain(r, g, b),
         y = 0;
-    [14, 10, 6, 3, 3, 2, 2, 1, 1, 1].forEach((n) => rect(
-        'b', 'b', 'c',
+    [14, 10, 6, 3, 3, 3, 2, 2].forEach((n) => rect(
+        ri(7, 9), ri(7, 9), 'a',
         x + ri(TILE_SIZE - n),
         y + ri(TILE_SIZE - n),
         n,
@@ -42,20 +42,34 @@ function drawRockyTerrain(r, g, b) {
     ));
 }
 
+function drawStoneWall() {
+    const x = getTileX(),
+        y = 0;
+    rect(5, 5, 6, x, y);
+    [8, 8, 8, 8, 8, 6, 6, 6, 6, 4].forEach((n) => rect(
+        ri(8, 9), 8, 'a',
+        x + ri(TILE_SIZE - n),
+        y + ri(TILE_SIZE - (n/2)),
+        n,
+        n/2,
+    ));
+}
+
 function drawTiles(doc) {
     const canvas = doc.createElement('canvas');
     canvas.width = 30 * TILE_SIZE;
     canvas.height = 2 * TILE_SIZE;
-    doc.body.appendChild(canvas);
+    // doc.body.appendChild(canvas);
     ctx = canvas.getContext('2d');
     canvas.style = styleCanvas;
     ctx.drawImage(tileImage, 1000, 1000);
+    // 0
     rect('f', 0, 0, 0, 0, 12, 12);
     rect('f', 'f', 0, 12, 12, 12, 12);
-    drawTerrain(2, 4, 3);
-    drawTerrain(2, 4, 2);
-    drawTerrain(3, 4, 3);
-    drawTerrain(4, 3, 3);
+    drawTerrain(2, 4, 3); // 1
+    drawTerrain(2, 4, 2); // 2
+    drawTerrain(3, 4, 3); // 3
+    drawTerrain(4, 3, 3); // 4
     ctx.fillStyle = '#fff';
     ctx.font = '20px serif';
     [ // Tile indices:
@@ -84,6 +98,9 @@ function drawTiles(doc) {
     });
     drawRockyTerrain(3, 4, 3); // 25
     drawRockyTerrain(4, 3, 3); // 26
+    drawTerrain(3, 4, 2); // 27 -- Between 2 and 3
+    drawTerrain(3, 3, 3); // 28 -- Between 3 and 4
+    drawStoneWall(); // 29
     // const x = getTileX();
     // rect(3, 3, 3, x, 0);
     // Tile incides 5, 6, 7, 8, 9

@@ -93,7 +93,6 @@ function getLegPoints(x, y, kneeY, legWidth, kneeBend, kneeWidth, lift) {
 }
 
 function drawSpecies(ctx, pos, species, direction = 4, t = 0) {
-	// const { x, y } = pos;
 	const { x, y } = worldToScreen(pos);
 	const {
 		baseColor, backColor, forwardColor, eyeColor,
