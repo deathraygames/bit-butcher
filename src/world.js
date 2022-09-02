@@ -126,8 +126,8 @@ class World {
             { name: 'Herb', tileIndex: 8, quantity: 1, stack: 64, bait: 1, emoji: '🌿', angleOffset: -.6, holdAngleOffset: PI/2 },
             { name: 'Blood wine', tileIndex: 13, quantity: 1, stack: 64, youth: 10, consumable: 1, emoji: '🍷' },
             { name: 'Meal', tileIndex: 14, quantity: 1, stack: 8, youth: 1, consumable: 1, emoji: '🍲' },
-            { name: 'Hammer', tileIndex: 17, quantity: 1, stack: 8, build: 1, weight: .5, emoji: '🔨', holdAngleOffset: PI },
-            { name: 'Pickaxe', tileIndex: 15, quantity: 1, stack: 8, dig: 1, weight: .5, emoji: '⛏️', holdAngleOffset: PI },
+            { name: 'Hammer', tileIndex: 17, quantity: 1, stack: 8, build: 1, weight: .5, reticle: 1, emoji: '🔨', holdAngleOffset: PI },
+            { name: 'Pickaxe', tileIndex: 15, quantity: 1, stack: 8, dig: 1, weight: .5, reticle: 1, emoji: '⛏️', holdAngleOffset: PI },
             { name: 'Stone', tileIndex: 19, quantity: 1, stack: 64, emoji: '🧱' },
         ];
         this.tiles = [];
@@ -193,7 +193,7 @@ class World {
         return this.chunks[key] || this.makeChunk();
     }
 
-    worldPosToTilePos(worldPos) {
+    worldPosToTilePos(worldPos) { // TODO: could have a static equivalent
         const conv = (n) => Math.floor(n);
         return vec2(conv(worldPos.x), conv(worldPos.y));
     }

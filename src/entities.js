@@ -228,23 +228,21 @@ class CharacterEntity extends WorldEntity {
         this.equip(this.equipIndex === invIndex ? -1 : invIndex);
     }
 
+    reEquip() { this.equip(this.equipIndex); }
+
     equip(invIndex) {
         if (invIndex < -1 || invIndex > 9) return false;
         this.equipIndex = invIndex;
         const item = this.inventory[this.equipIndex];
         // Shrink the equipped entity if it exists
-        if (this.equippedEntity) this.equippedEntity.drawSize = vec2();
-        if (!item) {
-            this.equippedEntity = null;
-            return; // If no item, then we're unequipping and we're done
-        }
+        if (this.equippedEntity) this.equippedEntity.kill();
+        if (!item) return; // If no item, then we're unequipping and we're done
         if (item.name === 'Butcher knife') achievements.award(1);
-        if (!item.entity) {
-            item.entity = new WorldEntity(item);
-            this.addChild(item.entity, vec2(-.2, .2));
-        }
-        if (!item.quantity) item.entity.drawSize = vec2();
-        this.equippedEntity = item.entity;
+        this.addChild(this.equippedEntity = new ItemEntity(
+            { itemType: { ...item }, world: this.world },
+            vec2(-.2, .2),
+        ));
+        if (!item.quantity) this.equippedEntity.drawSize = vec2();
     }
 
     getEquippedWeight() {
@@ -318,7 +316,7 @@ class CharacterEntity extends WorldEntity {
 
     build() {
         const w = this.world;
-        const where = this.equippedEntity.pos.copy();
+        const where = this.getActionTilePos();
         const currentGround = w.getGroundFromWorld(where);
         const isBuilding = (currentGround.tileIndex !== 29);
         if (isBuilding) {
@@ -336,7 +334,7 @@ class CharacterEntity extends WorldEntity {
 
     dig() {
         const w = this.world;
-        const where = this.equippedEntity.pos.copy();
+        const where = this.getActionTilePos();
         const currentGround = w.getGroundFromWorld(where);
         const isRock = (currentGround.tileIndex === 25 || currentGround.tileIndex === 26);
         // if (!isRock) { playSound('dud'); return; }
@@ -355,6 +353,7 @@ class CharacterEntity extends WorldEntity {
                 this.age - (item.youth || 0) - (this.age / 10)
             ));
         }
+        this.reEquip();
         if (item.name === 'Meal') achievements.award(6);
         if (!quiet) playSound('consume', this.pos);
         return 1;
@@ -364,6 +363,13 @@ class CharacterEntity extends WorldEntity {
         if (this.lungeTimer.active()) return;
         this.lungeTimer.set(1);
         this.velocity = this.velocity.add(vec2().setAngle(this.facing, .5));
+    }
+
+    getActionTilePos() {
+        if (!this.equippedEntity) return null;
+        return this.world.worldPosToTilePos(
+            this.equippedEntity.pos.add(vec2().setAngle(this.facing, 0.7))
+        ).add(vec2(.5,.5));
     }
 
     action(targetPos) {
@@ -429,8 +435,8 @@ class CharacterEntity extends WorldEntity {
         if (dist > this.lookRange || dist > LOOK_FOOD_DIST) return; // player is out of sight/smell
         const item = pc.getEquippedItem();
         if (!item) return; // player is not holding food
-        if (pc.hasBaitEquipped() && item.entity) {
-            this.walkTarget = item.entity.pos.add( vec2().setAngle(rand(2 * PI), rand(1, 2)) );
+        if (pc.hasBaitEquipped() && pc.equippedEntity) {
+            this.walkTarget = pc.equippedEntity.pos.add( vec2().setAngle(rand(2 * PI), rand(1, 2)) );
         }
     }
 
@@ -526,6 +532,14 @@ class CharacterEntity extends WorldEntity {
     }
 
     render() {
+        // Render reticle
+        const ee = this.equippedEntity;
+        if (ee && ee.reticle) drawRect(
+            this.getActionTilePos(),
+            ee.size,
+            new Color(.5,1,1,.2),
+        );
+        // Render body
         const bodyPos = this.pos.add(vec2(0,.05*Math.sin(this.walkCyclePercent*PI)));
         // const color = this.color.add(this.additiveColor).clamp();
         [[1,.2],[.9,.1]].forEach((ca) =>
@@ -599,24 +613,30 @@ class PlayerCharacterEntity extends CharacterEntity {
         this.scary = true;
 
         super.update();
+        this.updateEquip();
+    }
 
+    updateEquip() {
         const ee = this.equippedEntity;
-        if (ee) {
-            const thrust = this.actionTimer.active() ? 1.1 : .8;
-            const item = this.getEquippedItem();
-            ee.drawSize = vec2(
-                !item.quantity ? 0 : (this.actionTimer.active() ? 1.2 : 1)
-            );
-            ee.localPos = vec2().setAngle(this.facing, thrust);
-            let offset = vec2();
-            if (this.direction === 0) offset = vec2(.35, -.1);
-            else if (this.direction === 1) offset = vec2(.2, -.2);
-            else if (this.direction === 7) offset = vec2(-.2, -.1);
-            ee.localPos = ee.localPos.add(offset);
-            ee.localAngle = this.facing + (PI * 1.2) + (item.holdAngleOffset || 0);
-            ee.renderOrder = (ee.pos.y < this.pos.y) ? 11 : 9;
+        if (!ee) return;
+        const item = this.getEquippedItem();
+        if (!item) {
+            // this.equip(-1);
+            return;
         }
-        // console.log(this.walkTick, this.velocity.length());
+        const thrust = this.actionTimer.active() ? 1.1 : .8;
+        ee.drawSize = vec2(
+            !item.quantity ? 0 : (this.actionTimer.active() ? 1.2 : 1)
+        );
+        ee.localPos = vec2().setAngle(this.facing, thrust);
+        let offset = vec2();
+        if (this.direction === 0) offset = vec2(.35, -.1);
+        else if (this.direction === 1) offset = vec2(.2, -.2);
+        else if (this.direction === 7) offset = vec2(-.2, -.1);
+        ee.localPos = ee.localPos.add(offset);
+        ee.localAngle = this.facing + (PI * 1.2) + (item.holdAngleOffset || 0);
+        ee.renderOrder = (ee.pos.y < this.pos.y) ? 11 : 9;
+
     }
 }
 
@@ -642,10 +662,11 @@ class AnimalEntity extends CharacterEntity {
         super.update();
 
         const pc = this.findPc();
-        if (!this.isDead() && pc && pc.equippedEntity && pc.equippedEntity.damaging) {
-            if (isOverlapping(this.pos, this.size, pc.equippedEntity.pos, pc.equippedEntity.size)) {
+        const ee = pc ? pc.equippedEntity : null;
+        if (!this.isDead() && ee && ee.itemType.damaging) {
+            if (isOverlapping(this.pos, this.size, ee.pos, ee.size)) {
                 achievements.award(2);
-                const dmg = this.damage(pc.equippedEntity.damaging, pc.equippedEntity);
+                const dmg = this.damage(ee.itemType.damaging, ee);
                 if (dmg) {
                     const bloodItem = { ...this.world.getItemType('Blood') };
                     bloodItem.quantity = randInt(1, 3);
@@ -660,6 +681,7 @@ class ItemEntity extends WorldEntity {
     constructor(entOptions) {
         super(entOptions);
         this.itemType = entOptions.itemType;
+        this.reticle = entOptions.itemType.reticle;
         this.tileIndex = this.itemType.tileIndex;
         this.fadeTimer = new Timer;
     }
