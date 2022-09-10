@@ -2,6 +2,8 @@ import { playSound } from './sounds.js';
 import { achievements } from './achievements.js';
 import { getSpecies, drawSpecies, breedSpecies } from './species.js';
 
+const nc = (...a) => new Color(...a);
+
 /** A WorldEntity is a generic "thing" that exists in the world */
 class WorldEntity extends EngineObject {
     constructor(entOptions = {}) {
@@ -69,8 +71,8 @@ class WorldEntity extends EngineObject {
         // flash white when damaged
         if (!this.isDead() && this.damageTimer.isSet()) {
             const a = .5*percent(this.damageTimer.get(), .15, 0);
-            this.additiveColor = new Color(a,.1,.1,.5);
-        } else this.additiveColor = new Color(0,0,0,0);
+            this.additiveColor = nc(a,.1,.1,.5);
+        } else this.additiveColor = nc(0,0,0,0);
     }
 
     findPc() {
@@ -135,8 +137,8 @@ class CharacterEntity extends WorldEntity {
         this.addChild(this.bloodEmitter = new ParticleEmitter(
             vec2(), 0, 0, 0, 0, PI,  // pos, angle, emitSize, emitTime, emitRate, emiteCone
             undefined, undefined, // tileIndex, tileSize
-            new Color(1,.2,.2), new Color(.5,.1,.1), // colorStartA, colorStartB
-            new Color(.4,.1,.1), new Color(.4,.2,.2,.3), // colorEndA, colorEndB
+            nc(1,.2,.2), nc(.5,.1,.1), // colorStartA, colorStartB
+            nc(.4,.1,.1), nc(.4,.2,.2,.3), // colorEndA, colorEndB
             5, .2, .1, .07, .1, // particleTime, sizeStart, sizeEnd, particleSpeed, particleAngleSpeed
             .95, .95, 1, PI, .01,    // damping, angleDamping, gravityScale, particleCone, fadeRate, 
             .2, 1              // randomness, collide, additive, randomColorLinear, renderOrder
@@ -214,14 +216,24 @@ class CharacterEntity extends WorldEntity {
         if (existingItem && existingItem.name === itemType.name && ((existingItem.quantity || 0) < (existingItem.stack || 0))) {
             existingItem.quantity = (existingItem.quantity || 0) + 1;
         } else {
-            this.inventory[invIndex] = itemType;
+            this.inventory[invIndex] = { ...itemType }; // important to clone this so we don't modify the item type's values
         }
         playSound('pickup', this.pos);
         return true;
     }
 
-    throw() {
-        // TODO
+    throw(invIndex) { // aka drop
+        if (invIndex < 1 || invIndex > 9) return 0;
+        const item = this.inventory[invIndex];
+        if (!item) return 0;
+        const throwQuant = item.quantity >= 1 ? 1 : 0;
+        item.quantity -= throwQuant;
+        // Remove item from inventory if there's no more
+        if (!item.quantity) this.inventory[invIndex] = null;
+        this.reEquip();
+        if (throwQuant) this.world.makeItem(item.name, this.pos, 3);
+        // TODO: Adjust the quantity of this new item to 1?
+        return throwQuant;
     }
 
     toggleEquip(invIndex) {
@@ -232,11 +244,15 @@ class CharacterEntity extends WorldEntity {
 
     equip(invIndex) {
         if (invIndex < -1 || invIndex > 9) return false;
-        this.equipIndex = invIndex;
-        const item = this.inventory[this.equipIndex];
-        // Shrink the equipped entity if it exists
+        const item = this.inventory[invIndex];
+        // Shrink the existing equipped entity if it exists (we'll make a new one if needed)
         if (this.equippedEntity) this.equippedEntity.kill();
-        if (!item) return; // If no item, then we're unequipping and we're done
+        // If no item found, or item has run out, then we're unequipping and we're done
+        if (!item || !item.quantity) {
+            this.equipIndex = -1; // force an unequip in case we're here because of zero quantity
+            return;
+        }
+        this.equipIndex = invIndex;
         if (item.name === 'Butcher knife') achievements.award(1);
         this.addChild(this.equippedEntity = new ItemEntity(
             { itemType: { ...item }, world: this.world },
@@ -537,17 +553,17 @@ class CharacterEntity extends WorldEntity {
         if (ee && ee.reticle) drawRect(
             this.getActionTilePos(),
             ee.size,
-            new Color(.5,1,1,.2),
+            nc(.5,1,1,.2),
         );
         // Render body
         const bodyPos = this.pos.add(vec2(0,.05*Math.sin(this.walkCyclePercent*PI)));
         // const color = this.color.add(this.additiveColor).clamp();
         [[1,.2],[.9,.1]].forEach((ca) =>
-            drawRect(bodyPos.add(vec2(0, -this.size.y * .75)), vec2(this.size.x * ca[0], ca[1]), new Color(0,0,0, .1), this.angle)
+            drawRect(bodyPos.add(vec2(0, -this.size.y * .75)), vec2(this.size.x * ca[0], ca[1]), nc(0,0,0, .1), this.angle)
         );
-        // drawRect(bodyPos.add(vec2(0, -this.size.y * .75)), vec2(this.size.x * .9, .1), new Color(0,0,0, .1), this.angle);
+        // drawRect(bodyPos.add(vec2(0, -this.size.y * .75)), vec2(this.size.x * .9, .1), nc(0,0,0, .1), this.angle);
         drawSpecies(mainContext, bodyPos, this.species, this.direction, this.walkTick);
-        // drawRect(bodyPos, this.size.scale(this.drawScale), new Color(.3, .3, .3, .4), this.angle);
+        // drawRect(bodyPos, this.size.scale(this.drawScale), nc(.3, .3, .3, .4), this.angle);
         
         return;
     }
@@ -572,9 +588,9 @@ class CharacterEntity extends WorldEntity {
     //         });
     //     });
     //     // Eyes
-    //     drawRect(bodyPos.add(vec2(-.1, .3)), vec2(.1), new Color(0, 0, 0));
-    //     drawRect(bodyPos.add(vec2(.1, .3)), vec2(.1), new Color(0, 0, 0));
-    //     drawRect(bodyPos, vec2(.05, .2), new Color(1, 1, 0, .5), this.facing); // Center dot
+    //     drawRect(bodyPos.add(vec2(-.1, .3)), vec2(.1), nc(0, 0, 0));
+    //     drawRect(bodyPos.add(vec2(.1, .3)), vec2(.1), nc(0, 0, 0));
+    //     drawRect(bodyPos, vec2(.05, .2), nc(1, 1, 0, .5), this.facing); // Center dot
     // }
 }
 
@@ -590,18 +606,15 @@ class PlayerCharacterEntity extends CharacterEntity {
     }
 
     update() { // from platformer Player extends Character
-        // player controls
-        // this.holdingJump   = keyIsDown(38) || gamepadIsDown(0);
-        // this.holdingShoot  = mouseIsDown(0) || keyIsDown(90) || gamepadIsDown(2);
-        // this.pressingThrow = mouseIsDown(1) || keyIsDown(67) || gamepadIsDown(1);
-        // this.pressedDodge  = mouseIsDown(2) || keyIsDown(88) || gamepadIsDown(3);
         if (mouseIsDown(2)) this.goTo(mousePos, true); // right click movement
 
         const numKeyCodes = [48, 49, 50, 51, 52, 53, 54, 55, 56, 57];
         numKeyCodes.forEach((n) => { if (keyWasPressed(n)) this.toggleEquip(n - 48); });
 
-        if (keyIsDown(81) || gamepadIsDown(1)) this.throw();
-        if (keyIsDown(69) || mouseIsDown(0) || gamepadIsDown(0)) this.action(mousePos);
+        // "Q" or "Z" key
+        if (keyIsDown(81) || keyIsDown(90) || gamepadIsDown(1)) this.throw(this.equipIndex);
+        // "E" or "X" key
+        if (keyIsDown(69) || keyIsDown(88) || mouseIsDown(0) || gamepadIsDown(0)) this.action(mousePos);
 
         // movement control
         this.moveInput = isUsingGamepad ? gamepadStick(0) : 

@@ -14,7 +14,7 @@
             'dud': s([.8,,112,,.07,.05,1,2.26,-0.6,,,,,1.8,,.1,.2,.98,.1,.1]),
             'powerup': s([,,1152,,.04,.17,,1.21,,,744,.08,,,,,,.91,.03]),
             'pickup': s([1.05,,172,.02,,.17,2,.02,,,-409,.06,,,,.1,,.55,,.19]),
-            'walk': s([.5,.1,70,,,.01,4,,,,-9,.1,,,,,,.5]),
+            'walk': s([.65,.1,70,,,.01,4,,,,-9,.1,,,,,,.5]),
             'consume': s([1.2,,16,.07,.18,.34,1,.38,-0.1,-5.6,49,.15,.02,-0.1,36,.1,,.39,.14]),
         };
     };
@@ -58,28 +58,22 @@
     }
 
     function getSpecies(color) {
-    	let r = color ? color.r * 255 : ri$1(180) + 20;
-    	let g = color ? color.g * 255 : ri$1(180) + 20;
-    	let b = color ? color.b * 255 : ri$1(180) + 20;
-    	// if (r + g + b <= 4) r += 2;
-    	const bodyW = ri$1(6, size * .6);
-    	const bodyL = ri$1(6, size * .6);
-    	const bodyH = ri$1(5, size * .6);
+    	// const q = (n) => (color ? color[n] * 255 : ri(180) + 20);
+    	// let r = q('r'), g = q('g'), b = q('b');
+    	let r = color ? color.r * 255 : ri$1(180) + 20,
+    		g = color ? color.g * 255 : ri$1(180) + 20,
+    		b = color ? color.b * 255 : ri$1(180) + 20;
+    	const bodyW = ri$1(6, size * .6),
+    		bodyL = ri$1(6, size * .6),
+    		bodyH = ri$1(5, size * .6);
     	const bodyLevel = ri$1(0, size - bodyH - 2); // leave space for feet
     	const headH = ri$1(6, size * .5); // size / 3 + rand(size / 5);
     	const headW = ri$1(8, size * .6);
     	const headLevel = ri$1(0, size - headH - size * .2);
-    	const eyeW = ri$1(1, 3);
-    	const eyeH = ri$1(1, 3);
     	const eyeLevel = ri$1(2, headH - 4);
     	const eyeGap = ri$1(1, headW * .5);
     	const mouthW = ri$1(3, headW - 4);
     	const mouthH = ri$1(1, 2);
-    	const mouthLevel = ri$1(2, headH - eyeLevel - mouthH);
-    	const frontKneeBend = ri$1(-4, -1);
-    	const backKneeBend = ri$1(-4, 3);
-    	const kneeWidth = 2;
-    	const legWidth = Math.min(bodyW / 2, ri$1(1, 6));
     	return {
     		baseColor: [r-20,g-20,b-10],
     		backColor: [r-40,g-40,b-20],
@@ -87,9 +81,17 @@
     		eyeColor: (ri$1(2) === 0) ? [0,0,0] : [200,200,200],
     		headW, headH, headLevel,
     		bodyW, bodyL, bodyH, bodyLevel,
-    		eyeW, eyeH, eyeLevel, eyeGap,
-    		mouthW, mouthH, mouthLevel,
-    		frontKneeBend, backKneeBend, kneeWidth, legWidth
+    		eyeW: ri$1(1, 3),
+    		eyeH: ri$1(1, 3),
+    		eyeLevel,
+    		eyeGap,
+    		mouthW,
+    		mouthH,
+    		mouthLevel: ri$1(2, headH - eyeLevel - mouthH),
+    		frontKneeBend: ri$1(-4, -1),
+    		backKneeBend: ri$1(-4, 3),
+    		kneeWidth: 2,
+    		legWidth: Math.min(bodyW / 2, ri$1(1, 6)),
     	};
     }
 
@@ -137,7 +139,7 @@
     }
 
     function drawSpecies(ctx, pos, species, direction = 4, t = 0) {
-    	worldToScreen(pos);
+    	// const { x, y } = worldToScreen(pos);
     	const {
     		baseColor, backColor, forwardColor, eyeColor,
     		bodyW, bodyL, bodyH, bodyLevel,
@@ -261,6 +263,8 @@
     	);
     }
 
+    const nc = (...a) => new Color(...a);
+
     /** A WorldEntity is a generic "thing" that exists in the world */
     class WorldEntity extends EngineObject {
         constructor(entOptions = {}) {
@@ -328,8 +332,8 @@
             // flash white when damaged
             if (!this.isDead() && this.damageTimer.isSet()) {
                 const a = .5*percent(this.damageTimer.get(), .15, 0);
-                this.additiveColor = new Color(a,.1,.1,.5);
-            } else this.additiveColor = new Color(0,0,0,0);
+                this.additiveColor = nc(a,.1,.1,.5);
+            } else this.additiveColor = nc(0,0,0,0);
         }
 
         findPc() {
@@ -394,8 +398,8 @@
             this.addChild(this.bloodEmitter = new ParticleEmitter(
                 vec2(), 0, 0, 0, 0, PI,  // pos, angle, emitSize, emitTime, emitRate, emiteCone
                 undefined, undefined, // tileIndex, tileSize
-                new Color(1,.2,.2), new Color(.5,.1,.1), // colorStartA, colorStartB
-                new Color(.4,.1,.1), new Color(.4,.2,.2,.3), // colorEndA, colorEndB
+                nc(1,.2,.2), nc(.5,.1,.1), // colorStartA, colorStartB
+                nc(.4,.1,.1), nc(.4,.2,.2,.3), // colorEndA, colorEndB
                 5, .2, .1, .07, .1, // particleTime, sizeStart, sizeEnd, particleSpeed, particleAngleSpeed
                 .95, .95, 1, PI, .01,    // damping, angleDamping, gravityScale, particleCone, fadeRate, 
                 .2, 1              // randomness, collide, additive, randomColorLinear, renderOrder
@@ -473,14 +477,24 @@
             if (existingItem && existingItem.name === itemType.name && ((existingItem.quantity || 0) < (existingItem.stack || 0))) {
                 existingItem.quantity = (existingItem.quantity || 0) + 1;
             } else {
-                this.inventory[invIndex] = itemType;
+                this.inventory[invIndex] = { ...itemType }; // important to clone this so we don't modify the item type's values
             }
             playSound('pickup', this.pos);
             return true;
         }
 
-        throw() {
-            // TODO
+        throw(invIndex) { // aka drop
+            if (invIndex < 1 || invIndex > 9) return 0;
+            const item = this.inventory[invIndex];
+            if (!item) return 0;
+            const throwQuant = item.quantity >= 1 ? 1 : 0;
+            item.quantity -= throwQuant;
+            // Remove item from inventory if there's no more
+            if (!item.quantity) this.inventory[invIndex] = null;
+            this.reEquip();
+            if (throwQuant) this.world.makeItem(item.name, this.pos, 3);
+            // TODO: Adjust the quantity of this new item to 1?
+            return throwQuant;
         }
 
         toggleEquip(invIndex) {
@@ -491,11 +505,15 @@
 
         equip(invIndex) {
             if (invIndex < -1 || invIndex > 9) return false;
-            this.equipIndex = invIndex;
-            const item = this.inventory[this.equipIndex];
-            // Shrink the equipped entity if it exists
+            const item = this.inventory[invIndex];
+            // Shrink the existing equipped entity if it exists (we'll make a new one if needed)
             if (this.equippedEntity) this.equippedEntity.kill();
-            if (!item) return; // If no item, then we're unequipping and we're done
+            // If no item found, or item has run out, then we're unequipping and we're done
+            if (!item || !item.quantity) {
+                this.equipIndex = -1; // force an unequip in case we're here because of zero quantity
+                return;
+            }
+            this.equipIndex = invIndex;
             if (item.name === 'Butcher knife') achievements.award(1);
             this.addChild(this.equippedEntity = new ItemEntity(
                 { itemType: { ...item }, world: this.world },
@@ -594,7 +612,6 @@
         dig() {
             const w = this.world;
             const where = this.getActionTilePos();
-            console.log(where);
             const currentGround = w.getGroundFromWorld(where);
             const isRock = (currentGround.tileIndex === 25 || currentGround.tileIndex === 26);
             // if (!isRock) { playSound('dud'); return; }
@@ -797,17 +814,17 @@
             if (ee && ee.reticle) drawRect(
                 this.getActionTilePos(),
                 ee.size,
-                new Color(.5,1,1,.2),
+                nc(.5,1,1,.2),
             );
             // Render body
             const bodyPos = this.pos.add(vec2(0,.05*Math.sin(this.walkCyclePercent*PI)));
             // const color = this.color.add(this.additiveColor).clamp();
             [[1,.2],[.9,.1]].forEach((ca) =>
-                drawRect(bodyPos.add(vec2(0, -this.size.y * .75)), vec2(this.size.x * ca[0], ca[1]), new Color(0,0,0, .1), this.angle)
+                drawRect(bodyPos.add(vec2(0, -this.size.y * .75)), vec2(this.size.x * ca[0], ca[1]), nc(0,0,0, .1), this.angle)
             );
-            // drawRect(bodyPos.add(vec2(0, -this.size.y * .75)), vec2(this.size.x * .9, .1), new Color(0,0,0, .1), this.angle);
+            // drawRect(bodyPos.add(vec2(0, -this.size.y * .75)), vec2(this.size.x * .9, .1), nc(0,0,0, .1), this.angle);
             drawSpecies(mainContext, bodyPos, this.species, this.direction, this.walkTick);
-            // drawRect(bodyPos, this.size.scale(this.drawScale), new Color(.3, .3, .3, .4), this.angle);
+            // drawRect(bodyPos, this.size.scale(this.drawScale), nc(.3, .3, .3, .4), this.angle);
             
             return;
         }
@@ -832,9 +849,9 @@
         //         });
         //     });
         //     // Eyes
-        //     drawRect(bodyPos.add(vec2(-.1, .3)), vec2(.1), new Color(0, 0, 0));
-        //     drawRect(bodyPos.add(vec2(.1, .3)), vec2(.1), new Color(0, 0, 0));
-        //     drawRect(bodyPos, vec2(.05, .2), new Color(1, 1, 0, .5), this.facing); // Center dot
+        //     drawRect(bodyPos.add(vec2(-.1, .3)), vec2(.1), nc(0, 0, 0));
+        //     drawRect(bodyPos.add(vec2(.1, .3)), vec2(.1), nc(0, 0, 0));
+        //     drawRect(bodyPos, vec2(.05, .2), nc(1, 1, 0, .5), this.facing); // Center dot
         // }
     }
 
@@ -850,18 +867,15 @@
         }
 
         update() { // from platformer Player extends Character
-            // player controls
-            // this.holdingJump   = keyIsDown(38) || gamepadIsDown(0);
-            // this.holdingShoot  = mouseIsDown(0) || keyIsDown(90) || gamepadIsDown(2);
-            // this.pressingThrow = mouseIsDown(1) || keyIsDown(67) || gamepadIsDown(1);
-            // this.pressedDodge  = mouseIsDown(2) || keyIsDown(88) || gamepadIsDown(3);
             if (mouseIsDown(2)) this.goTo(mousePos, true); // right click movement
 
             const numKeyCodes = [48, 49, 50, 51, 52, 53, 54, 55, 56, 57];
             numKeyCodes.forEach((n) => { if (keyWasPressed(n)) this.toggleEquip(n - 48); });
 
-            if (keyIsDown(81) || gamepadIsDown(1)) this.throw();
-            if (keyIsDown(69) || mouseIsDown(0) || gamepadIsDown(0)) this.action(mousePos);
+            // "Q" or "Z" key
+            if (keyIsDown(81) || keyIsDown(90) || gamepadIsDown(1)) this.throw(this.equipIndex);
+            // "E" or "X" key
+            if (keyIsDown(69) || keyIsDown(88) || mouseIsDown(0) || gamepadIsDown(0)) this.action(mousePos);
 
             // movement control
             this.moveInput = isUsingGamepad ? gamepadStick(0) : 
@@ -1003,8 +1017,10 @@
     }
 
     const WORLD_SIZE = 200;
-    const SEED = 1235;
+    // const SEED = 1235;
+    const SEED = randInt(9999);
     const MAX_CHUNK_DNA = 999;
+    // const TILE_SIZE = 24;
     const TERRAIN_TILE_LOOKUP = [1, 2, 27, 3, 28, 4]; //  25, 26];
     // const HALF_WORLD_SIZE = WORLD_SIZE / 2;
 
@@ -1226,7 +1242,8 @@
         };
 
         init() {
-            const { size, species, animals, items } = this;
+            // const { size, species, animals, items } = this;
+            const { size } = this;
             // const pc = this.makePc();
             const chunk = this.getChunk();
 
@@ -1264,7 +1281,7 @@
 
         update() {
             // this.tiles[0].setData(pc.pos, pc.getTileData());
-            const pc = this.pc;
+            const { pc } = this;
             if (pc) {
                 let x, y;
                 if (pc.pos.x > this.size.x) x = 0;
@@ -1399,6 +1416,11 @@
         });
     }
 
+    // popup errors if there are any (help diagnose issues on mobile devices)
+    //onerror = (...parameters)=> alert(parameters);
+
+    // game variables
+    // let particleEmiter;
     const win = window;
     let gameState = 0; // 0 = not begun, 1 = alive & running, 2 = dead, 3 = win
     const TILE_SIZE = win.TILE_SIZE = 24; // was 16 in demo
@@ -1531,7 +1553,7 @@
         // drawTextScreen(invText, vec2(midX, overlayCanvas.height - 40), 20, new Color, 4);
 
         const equipItem = pc.inventory[pc.equipIndex];
-        const invTipText = `${equipItem ? equipItem.name : 'Nothing'} equipped, 1-9: Equip item, E: Action`;
+        const invTipText = `${equipItem ? equipItem.name : 'Nothing'} equipped, 1-9: Equip, E: Action, Q: Drop`;
         // drawTextScreen(invTipText, vec2(midX, overlayCanvas.height - 40), 20, new Color, 4);
         font.drawText(invTipText, screenToWorld(vec2(midX, overlayCanvas.height - 40)), 2/cameraScale, 1);
 

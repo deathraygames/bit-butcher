@@ -14,28 +14,20 @@ function addMid(obj) {
 }
 
 function getSpecies(color) {
-	let r = color ? color.r * 255 : ri(180) + 20;
-	let g = color ? color.g * 255 : ri(180) + 20;
-	let b = color ? color.b * 255 : ri(180) + 20;
-	// if (r + g + b <= 4) r += 2;
-	const bodyW = ri(6, size * .6);
-	const bodyL = ri(6, size * .6);
-	const bodyH = ri(5, size * .6);
+	let r = color ? color.r * 255 : ri(180) + 20,
+		g = color ? color.g * 255 : ri(180) + 20,
+		b = color ? color.b * 255 : ri(180) + 20;
+	const bodyW = ri(6, size * .6),
+		bodyL = ri(6, size * .6),
+		bodyH = ri(5, size * .6);
 	const bodyLevel = ri(0, size - bodyH - 2); // leave space for feet
 	const headH = ri(6, size * .5); // size / 3 + rand(size / 5);
 	const headW = ri(8, size * .6);
 	const headLevel = ri(0, size - headH - size * .2);
-	const eyeW = ri(1, 3);
-	const eyeH = ri(1, 3);
 	const eyeLevel = ri(2, headH - 4);
 	const eyeGap = ri(1, headW * .5)
 	const mouthW = ri(3, headW - 4);
 	const mouthH = ri(1, 2);
-	const mouthLevel = ri(2, headH - eyeLevel - mouthH);
-	const frontKneeBend = ri(-4, -1);
-	const backKneeBend = ri(-4, 3);
-	const kneeWidth = 2;
-	const legWidth = Math.min(bodyW / 2, ri(1, 6));
 	return {
 		baseColor: [r-20,g-20,b-10],
 		backColor: [r-40,g-40,b-20],
@@ -43,9 +35,17 @@ function getSpecies(color) {
 		eyeColor: (ri(2) === 0) ? [0,0,0] : [200,200,200],
 		headW, headH, headLevel,
 		bodyW, bodyL, bodyH, bodyLevel,
-		eyeW, eyeH, eyeLevel, eyeGap,
-		mouthW, mouthH, mouthLevel,
-		frontKneeBend, backKneeBend, kneeWidth, legWidth
+		eyeW: ri(1, 3),
+		eyeH: ri(1, 3),
+		eyeLevel,
+		eyeGap,
+		mouthW,
+		mouthH,
+		mouthLevel: ri(2, headH - eyeLevel - mouthH),
+		frontKneeBend: ri(-4, -1),
+		backKneeBend: ri(-4, 3),
+		kneeWidth: 2,
+		legWidth: Math.min(bodyW / 2, ri(1, 6)),
 	};
 }
 
@@ -93,7 +93,7 @@ function getLegPoints(x, y, kneeY, legWidth, kneeBend, kneeWidth, lift) {
 }
 
 function drawSpecies(ctx, pos, species, direction = 4, t = 0) {
-	const { x, y } = worldToScreen(pos);
+	// const { x, y } = worldToScreen(pos);
 	const {
 		baseColor, backColor, forwardColor, eyeColor,
 		bodyW, bodyL, bodyH, bodyLevel,

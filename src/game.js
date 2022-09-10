@@ -6,7 +6,7 @@ import { achievements } from './achievements.js';
 //onerror = (...parameters)=> alert(parameters);
 
 // game variables
-let particleEmiter;
+// let particleEmiter;
 const win = window;
 let gameState = 0; // 0 = not begun, 1 = alive & running, 2 = dead, 3 = win
 const TILE_SIZE = win.TILE_SIZE = 24; // was 16 in demo
@@ -139,7 +139,7 @@ function renderInventory(pc) {
     // drawTextScreen(invText, vec2(midX, overlayCanvas.height - 40), 20, new Color, 4);
 
     const equipItem = pc.inventory[pc.equipIndex];
-    const invTipText = `${equipItem ? equipItem.name : 'Nothing'} equipped, 1-9: Equip item, E: Action`;
+    const invTipText = `${equipItem ? equipItem.name : 'Nothing'} equipped, 1-9: Equip, E: Action, Q: Drop`;
     // drawTextScreen(invTipText, vec2(midX, overlayCanvas.height - 40), 20, new Color, 4);
     font.drawText(invTipText, screenToWorld(vec2(midX, overlayCanvas.height - 40)), 2/cameraScale, 1);
 

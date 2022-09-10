@@ -1,9 +1,10 @@
 import { PlayerCharacterEntity, AnimalEntity, ItemEntity, SpiritEntity } from './entities.js';
 
 const WORLD_SIZE = 200;
-const SEED = 1235;
+// const SEED = 1235;
+const SEED = randInt(9999);
 const MAX_CHUNK_DNA = 999;
-const TILE_SIZE = 24;
+// const TILE_SIZE = 24;
 const TERRAIN_TILE_LOOKUP = [1, 2, 27, 3, 28, 4]; //  25, 26];
 // const HALF_WORLD_SIZE = WORLD_SIZE / 2;
 
@@ -225,7 +226,8 @@ class World {
     };
 
     init() {
-        const { size, species, animals, items } = this;
+        // const { size, species, animals, items } = this;
+        const { size } = this;
         // const pc = this.makePc();
         const chunk = this.getChunk();
 
@@ -263,7 +265,7 @@ class World {
 
     update() {
         // this.tiles[0].setData(pc.pos, pc.getTileData());
-        const pc = this.pc;
+        const { pc } = this;
         if (pc) {
             let x, y;
             if (pc.pos.x > this.size.x) x = 0;
