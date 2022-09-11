@@ -24,7 +24,7 @@ class Chunk {
         this.dna = this.generateDna();
         this.tileCellArray = this.generateTerrainTileCellArray(); // A number of points to be used for the Voronoi diagram of tiles
         this.customizedGround = {};
-        console.log(this);
+        // console.log(this);
     }
 
     static getKey(pos) { return `${pos.x},${pos.y}`; }

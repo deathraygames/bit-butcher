@@ -10,7 +10,7 @@ import { achievements } from './achievements.js';
 const win = window;
 let gameState = 0; // 0 = not begun, 1 = alive & running, 2 = dead, 3 = win
 const TILE_SIZE = win.TILE_SIZE = 24; // was 16 in demo
-const WIN_MEAT = 24;
+const WIN_MEAT = 13;
 let w;
 let font;
 

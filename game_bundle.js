@@ -30,9 +30,9 @@
         ['Move (W,A,S,D or Arrows)'], // 0
         ['Pick up and equip knife (#)'], // 1
         ['Stab an animal'], // 2
-        ['Breed animals (herbs)'], // 3
-        ['Make forbidden wine (10 blood)'], // 4
-        ['Collect 24 meat'], // 5
+        ['Make forbidden wine (9 blood)'], // 3
+        ['Breed animals (with herbs)'], // 4
+        ['Collect 13 meat'], // 5
         ['Eat a meaty, home-cooked meal'], // 6
     ];
     let a = achievements;
@@ -58,8 +58,6 @@
     }
 
     function getSpecies(color) {
-    	// const q = (n) => (color ? color[n] * 255 : ri(180) + 20);
-    	// let r = q('r'), g = q('g'), b = q('b');
     	let r = color ? color.r * 255 : ri$1(180) + 20,
     		g = color ? color.g * 255 : ri$1(180) + 20,
     		b = color ? color.b * 255 : ri$1(180) + 20;
@@ -346,7 +344,7 @@
             super(entOptions);
             this.actionTimer = new Timer;
             this.lookTimer = new Timer;
-            this.planTimer = new Timer(rand(10));
+            this.planTimer = new Timer(20);
             this.agingTimer = new Timer;
             this.bleedTimer = new Timer;
             this.walkSoundTimer = new Timer;
@@ -360,8 +358,9 @@
             this.bioParents = entOptions.bioParents || null;
             this.species = entOptions.species || breedSpecies(this.bioParents) || getSpecies(this.color);
             this.renderOrder = 10;
-            this.health = 2; // TODO: 4?
-            this.maxSpeed = .14;
+            this.health = 2;
+            this.speedRamp = 0; // 0-1 ~ acceleration
+            this.maxSpeed = .26;
             this.lookRange = 7;
             this.oldAge = Infinity;
             this.timid = false;
@@ -468,19 +467,25 @@
             return this.inventory[this.equipIndex];
         }
 
-        pickup(itemType, invIndex) {
+        pickup(itemType, pickupQuant = 1, invIndex) {
             if (typeof invIndex !== 'number') {
                 invIndex = this.findOpenInventoryIndex(itemType.name);
             }
             if (!itemType || invIndex < 1 || invIndex > 9) return false;
             const existingItem = this.inventory[invIndex];
-            if (existingItem && existingItem.name === itemType.name && ((existingItem.quantity || 0) < (existingItem.stack || 0))) {
-                existingItem.quantity = (existingItem.quantity || 0) + 1;
-            } else {
-                this.inventory[invIndex] = { ...itemType }; // important to clone this so we don't modify the item type's values
+            // TODO: Rework this to allow partial pickups if quantity is too high
+            if (existingItem && existingItem.name === itemType.name) {
+                const newQuant = (existingItem.quantity || 0) + pickupQuant;
+                if (newQuant >= (existingItem.stack || 0)) return 0;
+                existingItem.quantity = newQuant;
+            } else { // Item doesn't exist in inventory, so let's add it
+                this.inventory[invIndex] = {
+                    ...itemType, // important to clone this so we don't modify the item type's values
+                    quantity: pickupQuant, // TODO: check for stack size
+                };
             }
             playSound('pickup', this.pos);
-            return true;
+            return pickupQuant;
         }
 
         throw(invIndex) { // aka drop
@@ -572,20 +577,20 @@
         craft(craftWhat) {
             const equippedItem = this.getEquippedItem();
             if (craftWhat === 'wine') {
-                if (equippedItem.name !== 'Blood' || equippedItem.quantity < 10) {
+                if (equippedItem.name !== 'Blood' || equippedItem.quantity < 9) {
                     playSound('dud', this.pos);
                     return;
                 }
-                equippedItem.quantity -= 10;
-                achievements.award(4);
+                equippedItem.quantity -= 9;
+                achievements.award(3);
                 this.world.makeItem('Blood wine', this.pos, 2);
                 playSound('craft');
             } else if (craftWhat === 'meal') {
-                if (equippedItem.name !== 'Meat' || equippedItem.quantity < 24) {
+                if (equippedItem.name !== 'Meat' || equippedItem.quantity < 13) {
                     playSound('dud', this.pos);
                     return;
                 }
-                equippedItem.quantity -= 24;
+                equippedItem.quantity -= 13;
                 this.world.makeItem('Meal', this.pos, 2);
                 playSound('craft', this.pos);
             }
@@ -735,7 +740,7 @@
             this.lookTimer.set(5);
             mate.estrousTimer.unset();
             this.estrousTimer.unset();
-            achievements.award(3);
+            achievements.award(4);
             this.world.makeAnimal(this.pos, [this.species, mate.species]);
         }
 
@@ -759,29 +764,36 @@
             this.plan();
 
             // Movement
-            this.movementVelocity = this.velocity.copy();
-            if (isMoveInput) {
-                const runInput = moveInput.scale(.04 * this.urgency);
-                this.movementVelocity = this.movementVelocity.add(runInput);
+            // Get the movement velocity direction, and the acceleration
+            // Base vel and acceleration is based on slowing down
+            let accel = -.04;
+            let newMoveVel = this.movementVelocity.copy();
+            if (isMoveInput) { // Player-input based movement
                 if (!this.walkSoundTimer.active()) {
                     playSound('walk', this.pos);
                     this.walkSoundTimer.set(.21);
                 }
-            } else if (this.walkTarget) {
+                newMoveVel = moveInput; // gets direction
+                accel = .03;
+            } else if (this.walkTarget) { // "AI" target based movement
                 const dist = this.pos.distance(this.walkTarget);
-                if (dist > .75) {
-                    this.movementVelocity = this.movementVelocity.lerp(this.walkTarget.subtract(this.pos), 0.5);
-                }
+                newMoveVel = this.walkTarget.subtract(this.pos);
+                accel = (dist < 3) ? -.03 : .03;
             }
-            const maxSpd = this.maxSpeed * this.urgency * (1 - this.getEquippedWeight());
-            // TODO: use this.movementVelocity.clampLength(); -- but needs tweaking the max speed
-            this.movementVelocity.x = clamp(this.movementVelocity.x, -maxSpd, maxSpd);
-            this.movementVelocity.y = clamp(this.movementVelocity.y, -maxSpd, maxSpd);
-            // // Only use movement velocity if you're currently moving slower
+            // Determine the speed the creature should be moving based on ramping up, urgency, and max speed
+            this.speedRamp = Math.min(1, Math.max(0, this.speedRamp + accel));
+            const moveSpd = this.maxSpeed * this.urgency * (1 - this.getEquippedWeight()) * this.speedRamp;
+            newMoveVel = newMoveVel.normalize(moveSpd).clampLength(this.maxSpeed);
+            // this.movementVelocity = this.movementVelocity.normalize(moveSpd).clampLength(this.maxSpeed);
+            this.movementVelocity = this.movementVelocity.lerp(newMoveVel, .08);
+            // Only use movement velocity if you're currently moving slower
+            // If we're moving faster, we might have been pushed, boosted, or something else - and that shouldn't constrain velocity
+            const vx = this.velocity.x, vy = this.velocity.y;
             this.velocity = vec2(
-                (this.velocity.x > maxSpd || this.velocity.x < -maxSpd) ? this.velocity.x : this.movementVelocity.x,
-                (this.velocity.y > maxSpd || this.velocity.y < -maxSpd) ? this.velocity.y : this.movementVelocity.y,
+                (vx > moveSpd || vx < -moveSpd) ? vx : this.movementVelocity.x,
+                (vy > moveSpd || vy < -moveSpd) ? vy : this.movementVelocity.y,
             );
+            // this.velocity = this.velocity.lerp(this.movementVelocity, .1);
 
             const speed = this.velocity.length();
             // TODO: clean this up - redundant?
@@ -790,7 +802,8 @@
             this.walkCyclePercent += speed * .5;
             this.walkCyclePercent = speed > .01 ? mod(this.walkCyclePercent) : 0;
             // Facing
-            this.facing = this.velocity.angle();
+            if (speed !== 0) this.facing = this.velocity.angle();
+            
             // Aging
             this.getOlder();
         }
@@ -860,7 +873,7 @@
             super(entOptions);
             this.isPlayerCharacter = true;
             this.health = 5;
-            this.maxSpeed = .2;
+            this.maxSpeed = .25;
             this.renderOrder = 10;
             this.age = 18;
             this.oldAge = 100;
@@ -934,7 +947,6 @@
 
         update() {
             super.update();
-
             const pc = this.findPc();
             const ee = pc ? pc.equippedEntity : null;
             if (!this.isDead() && ee && ee.itemType.damaging) {
@@ -942,9 +954,10 @@
                     achievements.award(2);
                     const dmg = this.damage(ee.itemType.damaging, ee);
                     if (dmg) {
-                        const bloodItem = { ...this.world.getItemType('Blood') };
-                        bloodItem.quantity = randInt(1, 3);
-                        pc.pickup(bloodItem);
+                        pc.pickup(
+                            { ...this.world.getItemType('Blood') }, // item type
+                            randInt(1, 3), // quantity
+                        );
                     }
                 }
             }
@@ -970,7 +983,7 @@
                 if (isOverlapping(this.pos, this.size, pc.pos, pc.size)) {
                     // achievements.award(2);
                     // const dmg = this.damage(pc.equippedEntity.damaging, pc.equippedEntity);
-                    pc.pickup(this.itemType);
+                    pc.pickup(this.itemType, this.itemType.quantity || 1);
                     this.health = 0;
                     this.fadeTimer.set(.4);
                     setTimeout(() => this.kill(), 400);
@@ -1424,7 +1437,7 @@
     const win = window;
     let gameState = 0; // 0 = not begun, 1 = alive & running, 2 = dead, 3 = win
     const TILE_SIZE = win.TILE_SIZE = 24; // was 16 in demo
-    const WIN_MEAT = 24;
+    const WIN_MEAT = 13;
     let w;
     let font;
 

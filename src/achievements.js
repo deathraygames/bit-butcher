@@ -3,9 +3,9 @@ let achievements = [
     ['Move (W,A,S,D or Arrows)'], // 0
     ['Pick up and equip knife (#)'], // 1
     ['Stab an animal'], // 2
-    ['Breed animals (herbs)'], // 3
-    ['Make forbidden wine (10 blood)'], // 4
-    ['Collect 24 meat'], // 5
+    ['Make forbidden wine (9 blood)'], // 3
+    ['Breed animals (with herbs)'], // 4
+    ['Collect 13 meat'], // 5
     ['Eat a meaty, home-cooked meal'], // 6
 ];
 let a = achievements;
