@@ -29,8 +29,8 @@ rem add your game's files to include here
 type ..\game_bundle.js >> %BUILD_FILENAME%
 echo. >> %BUILD_FILENAME%
 
-rem copy images to build folder
-copy ..\tiles.png tiles.png
+rem copy images to build folder (commented out)
+rem copy ..\tiles.png tiles.png
 
 rem minify code with closure
 move %BUILD_FILENAME% %BUILD_FILENAME%.temp

@@ -1,11 +1,11 @@
 {
-  "name": "littlejsengine",
-  "version": "1.3.8",
-  "description": "LittleJS - Tiny and Fast HTML5 Game Engine",
-  "main": "engine/engine.all.js",
+  "name": "bit-butcher",
+  "version": "1.0.0",
+  "description": "A game made for js13k games 2022 - including LittleJS (Tiny and Fast HTML5 Game Engine) v1.3.8",
+  "main": "src/game.js",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/KilledByAPixel/LittleJS.git"
+    "url": "git+https://github.com/deathraygames/bit-butcher"
   },
   "keywords": [
     "HTML5",
@@ -16,10 +16,13 @@
     "JS13K",
     "webgl"
   ],
-  "author": "Frank Force",
+  "authors": [
+    "Luke Nickerson",
+    "Frank Force"
+  ],
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/KilledByAPixel/LittleJS/issues"
+    "url": "https://github.com/deathraygames/bit-butcher/issues"
   },
   "homepage": "https://github.com/KilledByAPixel/LittleJS",
   "dependencies": {
@@ -32,7 +35,7 @@
   "scripts": {
     "serve": "npx http-server",
     "rollup": "rollup ./src/game.js --file game_bundle.js --format iife",
-    "build": "npm run rollup && build.bat"
+    "build": "npm run rollup && build.bat && filesize.bat game.zip"
   },
   "devDependencies": {
     "rollup": "^2.78.1"

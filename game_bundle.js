@@ -748,7 +748,7 @@
             if (this.agingTimer.active()) return false;
             // @ 6 sec/year --> 10 minutes IRL = 600 sec IRL = 100 years
             // @ 3 sec/year --> 5 minutes IRL = 100 years
-            this.agingTimer.set(5);
+            this.agingTimer.set(4);
             this.age += 1;
             if (this.isOld()) this.damage(1, this);
         }
@@ -1053,7 +1053,7 @@
             this.dna = this.generateDna();
             this.tileCellArray = this.generateTerrainTileCellArray(); // A number of points to be used for the Voronoi diagram of tiles
             this.customizedGround = {};
-            console.log(this);
+            // console.log(this);
         }
 
         static getKey(pos) { return `${pos.x},${pos.y}`; }

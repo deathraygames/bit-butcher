@@ -489,7 +489,7 @@ class CharacterEntity extends WorldEntity {
         if (this.agingTimer.active()) return false;
         // @ 6 sec/year --> 10 minutes IRL = 600 sec IRL = 100 years
         // @ 3 sec/year --> 5 minutes IRL = 100 years
-        this.agingTimer.set(5);
+        this.agingTimer.set(4);
         this.age += 1;
         if (this.isOld()) this.damage(1, this);
     }
